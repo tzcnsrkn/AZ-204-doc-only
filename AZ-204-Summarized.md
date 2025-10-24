@@ -564,8 +564,7 @@ builder.Configuration.AddAzureAppConfiguration(options =>
            // Configure to reload configuration if the registered sentinel key is modified
            .ConfigureRefresh(refreshOptions => refreshOptions.Register("TestApp:Settings:Sentinel", refreshAll: true));
 });
-builder.Services.AddFeatureManagement();
-builder.Services.AddFeatureFilter<TargetingFilter>(); // (for example)
+...
 
 // Query keys
 AsyncPageable<ConfigurationSetting> settings = client.GetConfigurationSettingsAsync(new SettingSelector { KeyFilter = "AppName:*" });
@@ -594,7 +593,7 @@ When using multiple `.Select()`, if a key with the same name exists in both labe
 A successful feature management system requires:
 
 - An application using feature flags.
-- A separate repository storing feature flags and their states.
+- A separate centralized, external storage service (or `Azure App Configuration` service) that holds all your feature flags and their current states (e.g., on, off, or specific targeting rules).
 
 ### Using Feature Flags in Code
 
@@ -627,8 +626,8 @@ builder.Configuration.AddAzureAppConfiguration(options =>
 
 // Add feature management to the container of services.
 builder.Services.AddFeatureManagement();
-// Registering a feature filter
-builder.Services.AddFeatureFilter<TargetingFilter>(); // (for example)
+// below is explained later
+builder.Services.AddFeatureFilter<TargetingFilter>(); 
 ```
 
 ### [Conditional feature flags](https://learn.microsoft.com/en-us/azure/azure-app-configuration/howto-feature-filters-aspnet-core)
@@ -652,31 +651,41 @@ Allows the feature flag to be enabled or disabled dynamically.
 
 1. Implement `ITargetingContextAccessor`
 
-   ```cs
-   private const string TargetingContextLookup = "TestTargetingContextAccessor.TargetingContext";
-   public ValueTask<TargetingContext> GetContextAsync()
-   {
-       if (httpContext.Items.TryGetValue(TargetingContextLookup, out object value))
-           return new ValueTask<TargetingContext>((TargetingContext)value);
+  ```cs
+  public class HttpContextTargetingContextAccessor : ITargetingContextAccessor
+  {
+      private const string TargetingContextLookup = "TestTargetingContextAccessor.TargetingContext";
+      private readonly IHttpContextAccessor _httpContextAccessor;
 
-       // Example: `test@contoso.com` - User: `test`, Group(s): `contoso.com`
-       List<string> groups = new List<string>();
-       if (httpContext.User.Identity.Name != null)
-           groups.Add(httpContext.User.Identity.Name.Split("@", StringSplitOptions.None)[1]);
+      public HttpContextTargetingContextAccessor(IHttpContextAccessor httpContextAccessor)
+      {
+          _httpContextAccessor = httpContextAccessor;
+      }
 
-       var targetingContext = new TargetingContext
-       {
-           UserId = httpContext.User.Identity.Name,
-           Groups = groups
-       };
-       httpContext.Items[TargetingContextLookup] = targetingContext;
-       return new ValueTask<TargetingContext>(targetingContext);
-    }
-   ```
+      public ValueTask<TargetingContext> GetContextAsync()
+      {
+          if (httpContext.Items.TryGetValue(TargetingContextLookup, out object value))
+              return new ValueTask<TargetingContext>((TargetingContext)value);
+
+          // Example: `test@contoso.com` - User: `test`, Group(s): `contoso.com`
+          List<string> groups = new List<string>();
+          if (httpContext.User.Identity.Name != null)
+              groups.Add(httpContext.User.Identity.Name.Split("@", StringSplitOptions.None)[1]);
+
+          var targetingContext = new TargetingContext
+          {
+              UserId = httpContext.User.Identity.Name,
+              Groups = groups
+          };
+          httpContext.Items[TargetingContextLookup] = targetingContext;
+          return new ValueTask<TargetingContext>(targetingContext);
+      }
+  }
+  ```
 
 1. Add `TargetingFilter`: `services.AddFeatureManagement().AddFeatureFilter<TargetingFilter>();`
 
-1. Update the `ConfigureServices` method to add the `ITargetingContextAccessor` implementation: `services.AddSingleton<ITargetingContextAccessor, TestTargetingContextAccessor>();`
+1. Update the `ConfigureServices` method to add the `ITargetingContextAccessor` implementation: `services.AddSingleton<ITargetingContextAccessor, HttpContextTargetingContextAccessor>();`
 
 1. `app > Feature Manager > (create feature flag) > (enable) > Edit > Use feature filter > Targeting filter >  Override by Groups and Override by Users`
 
@@ -691,7 +700,7 @@ The feature manager supports _appsettings.json_ as a configuration source for fe
   "FeatureManagement": {
     "FeatureA": true, // Feature on
     "FeatureB": false, // Feature off
-    "FeatureC": {
+    "FeatureC": {     // Conditional feature flag. It uses a feature filter called Percentage to enable the feature for a random 50% of users.
       "EnabledFor": [
         {
           "Name": "Percentage",
@@ -701,11 +710,91 @@ The feature manager supports _appsettings.json_ as a configuration source for fe
     }
   }
 }
-```
+```  
 
 ### Feature Flag Repository
 
-Azure App Configuration serves as a centralized repository for feature flags, enabling externalizing all feature flags used in an application. This allows changing feature states without modifying and redeploying the application.
+Azure App Configuration serves as a centralized repository for feature flags, enabling externalizing all feature flags used in an application. This allows changing feature states without modifying and redeploying the application, no stop/start required - thanks to `Polling mechanism + Cache refresh`.
+
+<br>
+
+#### **Built-in Feature Filters**
+
+| Filter | Purpose | Auto-Added | Key Properties |
+|--------|---------|------------|----------------|
+| `Microsoft.Percentage` | Enable feature for % of users | Yes | `Value` (0-100) |
+| `Microsoft.TimeWindow` | Enable during time window | Yes | `Start`, `End`, `Recurrence` (optional) |
+| `Microsoft.Targeting` | Enable for specific users/groups (in web apps) | No (use `AddTargetingFilter()`) | `Audience` (Users, Groups, DefaultRolloutPercentage, Exclusion) |
+| `ContextualTargetingFilter` | Targeting for console apps / non-web scenarios | Yes | Same as Targeting, but you must pass the `TargetingContext` manually in your code. |
+
+#### **Recurrence Pattern Types**
+
+| Pattern | Key Properties |
+|---------|---------------|
+| Daily | `Type: "Daily"`, `Interval` (optional, days between occurrences) |
+| Weekly | `Type: "Weekly"`, `DaysOfWeek` (array), `Interval` (optional, weeks between), `FirstDayOfWeek` (optional) |
+
+#### **Recurrence Range Types**
+
+| Range | Description | Key Properties |
+|-------|-------------|----------------|
+| NoEnd | Repeat indefinitely | `Type: "NoEnd"` |
+| EndDate | Repeat until date | `Type: "EndDate"`, `EndDate` |
+| Numbered | Repeat N times | `Type: "Numbered"`, `NumberOfOccurrences` |
+
+#### **Targeting Setup**
+
+| Application Type | Implementation | Registration |
+|-----------------|----------------|--------------|
+| Web App | Use `ITargetingContextAccessor` | `.WithTargeting()` or `.WithTargeting<T>()` |
+| Console App | Use `ContextualTargetingFilter` + pass `TargetingContext` manually | Standard feature management setup |
+
+#### **Targeting Evaluation Order**  
+Evaluation stops as soon as the first matching rule is found.
+
+| Priority | Rule | Condition | Result | Notes |
+|----------|------|-----------|--------|-------|
+| 1 | **Exclusion** | User or any of his group is in `Exclusion` list | **Disabled** | Always checked first. Immediately disables the feature regardless of other rules.  |
+| 2 | **Users** | User is in `Users` list | **Enabled** | Direct user targeting.|
+| 3 | **Groups** | User is in any defined `Group` | **Enabled/Disabled** (based on group's rollout %) | Uses percentage-based rollout per group. User may or may not be `Enabled` based on the percentage.  |
+| 4 | **Default Rollout** | User not in `Exclusion`, `Users`, or `Groups` | **Enabled/Disabled** (based on `DefaultRolloutPercentage`) | Uses percentage-based enablement.  |
+| 5 | **None Match** | DefaultRolloutPercentage = 0% OR user falls outside rollout | **Disabled** | Final fallback |
+
+#### **[Variants Overview](https://learn.microsoft.com/en-us/azure/azure-app-configuration/feature-management-dotnet-reference#variants)**
+
+| Concept | Description |
+|---------|-------------|
+| Purpose | A/B testing - multiple feature configurations |
+| Variant Properties | `configuration_value` (string, number, bool, or object), `name` |
+| Retrieve | `await featureManager.GetVariantAsync("FeatureName")` |
+
+#### **[Variant Allocation Properties](https://learn.microsoft.com/en-us/azure/azure-app-configuration/feature-management-dotnet-reference#allocate-variants)**
+
+| Property | Description |
+|----------|-------------|
+| `default_when_disabled` | Takes effect if the flag is disabled, done by setting the `Enabled` field to false, also known as "kill switch". |
+| `default_when_enabled` | Takes effect if the flag is enabled but the allocation doesn't assign all percentiles. Any user placed in an unassigned percentile receives the `DefaultWhenEnabled` variant. |
+| `user` | Assign variant to specific users |
+| `group` | Assign variant if user in group(s) |
+| `percentile` | Assign variant if user in % range (e.g., 0-10) |
+| `seed` | Without a seed, a user might see VariantA today and VariantB tomorrow. The seed makes the random assignment predictable.<br>Its value is trivial, better to give a self-descriptive value. |
+
+#### **[Status Override (Variants)](https://learn.microsoft.com/en-us/azure/azure-app-configuration/feature-management-dotnet-reference#override-enabled-state-by-using-a-variant)**
+During the call to IsEnabledAsync on a flag with variants, the feature manager checks whether the variant assigned to the user is configured to override the result.
+
+| Value | Effect |
+|-------|--------|
+| `None` | No override (default) |
+| `Enabled` | Evaluate feature as `enabled` when variant chosen |
+| `Disabled` | Evaluate feature as `disabled` when variant chosen |
+
+#### **[Variant Service Provider](https://learn.microsoft.com/en-us/azure/azure-app-configuration/feature-management-dotnet-reference#variant-service-alias-attribute)**
+
+| Component | Purpose |
+|-----------|---------|
+| `IVariantServiceProvider<T>` | Get different service implementations per user based on variant |
+| Setup | `.WithVariantService<T>("FeatureName")` |
+| Attribute | `[VariantServiceAlias("Name")]` - map implementation to variant name |
 
 ## Security
 
@@ -715,21 +804,39 @@ A managed identity authenticates with Microsoft Entra ID and wraps the encryptio
 
 Prerequisites:
 
-- _A Standard tier_ Azure App Configuration
-- Azure Key Vault with soft-delete and purge-protection
-- An unexpired, enabled RSA or RSA-HSM key in the Key Vault with wrap and unwrap capabilities
+- _A Standard+ tier_ Azure App Configuration
+- Azure Key Vault with enabled soft-delete and purge-protection
+- An unexpired, enabled RSA or RSA-HSM key in the Key Vault with `wrap` and `unwrap` capabilities
 
 After setup, assign a managed identity to the App Configuration and grant it `GET`, `WRAP`, and `UNWRAP` (permits decrypting previously wrapped keys) permissions in the Key Vault's access policy:
 
-```sh
-az keyvault set-policy --key-permissions get wrapKey unwrapKey
+```bash
+az keyvault set-policy --name <YourKeyVaultName> \
+                       --object-id <ManagedIdentityObjectID> \
+                       --key-permissions get wrapKey unwrapKey
 ```
+**📝 NOTE:** To mitigate the possibility of the underlying managed key expiring, do both:  
+- Omit the key version when setting up encryption  
+- Enable _auto key rotation_ in Key Vault.
+
+**📝 NOTE:** Sensitive information can't be decrypted if any of the following occurs:
+
+- The store's identity loses permission to the encryption key
+- The managed key is permanently deleted
+- The managed key version expires
 
 ## [Private endpoint](https://learn.microsoft.com/en-us/azure/azure-app-configuration/concept-private-endpoint)
 
 - Enables secure access to Azure App Configuration over a private link using an IP address from the VNet address space.
 - Traffic stays on the Microsoft backbone network, preventing exposure to the public internet.
-- Blocks public network access by default; can be re-enabled.
+- Blocks public network access by default; can be re-enabled by following:<br>
+
+```bash
+az appconfig update \
+  --resource-group <resource-group-name> \
+  --name <App-Configuration-store-name> \
+  --enable-public-network true
+```
 - Uses same connection strings/auth; no app changes needed.
 
 ## Configure Key Vault
@@ -745,11 +852,25 @@ builder.Configuration.AddAzureAppConfiguration(options =>
 
 After the initialization, you can access the values of Key Vault references in the same way you access the values of regular App Configuration keys.
 
-## Import / Export configureation
+## Import / Export configuration
 
-Import all keys and feature flags from a file and apply test label: `az appconfig kv import -n MyAppConfiguration --label test -s file --path D:/abc.json --format json`
+```bash
+# Import all keys and feature flags from a file and apply "Test" label
+az appconfig kv import \
+  -n MyAppConfiguration \
+  --label test \
+  -s file \
+  --path D:/abc.json \
+  --format json
 
-Export all keys and feature flags with label test to a json file: `az appconfig kv export -n MyAppConfiguration --label test -d file --path D:/abc.json --format json`
+# Export all keys and feature flags with label "Test" to a json file
+az appconfig kv export \
+  -n MyAppConfiguration \
+  --label test \
+  -d file \
+  --path D:/abc.json \
+  --format json
+```
 
 ## CLI
 
