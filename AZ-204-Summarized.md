@@ -832,10 +832,11 @@ az keyvault set-policy --name <YourKeyVaultName> \
 - Blocks public network access by default; can be re-enabled by following:<br>
 
 ```bash
-az appconfig update \
-  --resource-group <resource-group-name> \
-  --name <App-Configuration-store-name> \
-  --enable-public-network true
+  # To enable requests coming from public networks while private endpoint is enabled. When false, only requests made through Private Links are allowed.
+  az appconfig update \
+    --resource-group <resource-group-name> \
+    --name <App-Configuration-store-name> \
+    --enable-public-network true
 ```
 - Uses same connection strings/auth; no app changes needed.
 
@@ -5622,21 +5623,23 @@ Set secret: `az keyvault secret set --vault-name $myKeyVault --name "ExamplePass
 
 Retrieve secret (in _JSON_ format): `az keyvault secret show --name "ExamplePassword" --vault-name $myKeyVault` (`value` property contains the secret value)
 
-Get secret version: `GET {vaultBaseUrl}/secrets/{secret-name}/{secret-version}?api-version=7.4`
+Get secret version: `GET {vaultBaseUrl}/secrets/{secret-name}/{secret-version}?api-version=2025-07-01`
 
 ## [Security](https://learn.microsoft.com/en-us/azure/key-vault/general/security-features)
 
 ## Key operations
 
-Rotating secrets:
+| Operation                    | Command                                                                                                       | Description                                                                                                                                                                                                             |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Manual Key Rotation      | `az keyvault key rotate --name <YourKeyName> --vault-name <YourVaultName>`                                          | Manually rotate a key to create a new version                                                                                                                                                                           |
+| [Automated Key Rotation](https://learn.microsoft.com/en-us/cli/azure/keyvault/key/rotation-policy?view=azure-cli-latest#az-keyvault-key-rotation-policy-update-examples)   | `az keyvault key rotation-policy update --name <YourKeyName> --vault-name <YourVaultName> --value path/to/policy.json`     | Configure automated rotation policy (e.g., time-based). |
+| List All Keys            | `az keyvault key list --vault-name <YourVaultName>`                                                        | List all keys in the vault                                                                                                                                                                                              |
+| List Enabled Keys Only   | `az keyvault key list --vault-name <YourVaultName> --query "[?attributes.enabled].name" -o tsv`            | Filter and display only enabled key names using JMESPath query                                                                                                                                                          |
+| Backup Key               | `az keyvault key backup --name <YourKeyName> --vault-name <YourVaultName> --file ./old-key-backup.blob` | Create a backup of a key to a file                                                                                                                                                                                      |
+| Delete Key (Soft Delete) | `az keyvault key delete --name <YourKeyName> --vault-name <YourVaultName>`                              | Move key to soft-deleted state (if enabled) or remove it                                                                                                                                                                |
+| Purge Key (Permanent)    | `az keyvault key purge --name <YourKeyName> --vault-name <YourVaultName>`                               | Permanently remove a soft-deleted key. Only applicable for soft-delete enabled vaults                                                                                                                                   |
 
-- `az keyvault key rotate`: manual rotation.
-- `az keyvault key rotation-policy`: automated rotation (ex: time).
-
-Removing keys:
-
-- `az keyvault key delete`: put key in soft delete state (if enabled, or simply removes it)
-- `az keyvault key purge`: permanently removes soft deleted key (**only**)
+**📝 NOTE:** Latter sends an event to Azure Event Grid, which you can subscribe to for sending email alerts.  
 
 ### Access Model
 
@@ -5653,12 +5656,37 @@ az keyvault set-policy --name myKeyVault --object-id <object-id> --secret-permis
 
 Key Vault is associated with the Entra ID tenant of the subscription and all callers must register in this tenant and authenticate to access the key vault.
 
-For applications, there are two ways to obtain a service principal:
+For applications, there are two ways to obtain a service principal - first is recommended:
 
-- Enable a system-assigned **managed identity** (recommended) for the application. With managed identity, Azure internally manages the application's service principal and automatically authenticates the application with other Azure services. Managed identity is available for applications deployed to various services.
-- If you can't use managed identity, you instead register the application with your Entra ID tenant. Registration also creates a second application object that identifies the app across all tenants.
+- Enable a system-assigned **managed identity** for the application. With managed identity, Azure internally manages the application's service principal and automatically authenticates the application with other Azure services. Managed identity is available for applications deployed to various services. It also handles credential rotation.
+- If you can't use managed identity, you instead register the application with your Entra ID tenant. Registration also creates a second object (`Application Object`, as global definition of your app) that identifies the app across all tenants.
 
-`var client = new SecretClient(new Uri("<YourVaultUri>"), new DefaultAzureCredential());`
+#### Usage
+```csharp
+string keyVaultName = Environment.GetEnvironmentVariable("KEY_VAULT_NAME");
+var kvUri = "https://" + keyVaultName + ".vault.azure.net";
+
+var client = new SecretClient(
+    new Uri(kvUri),      // Where: Your Key Vault URL (e.g., https://my-vault.vault.azure.net/)
+    new DefaultAzureCredential()    // How: Automatically handles authentication
+);
+
+...
+
+// Read a secret
+KeyVaultSecret secret = await client.GetSecretAsync("ConnectionString");
+string value = secret.Value;
+
+// Create/Update a secret. If name exists, will create new version of that secret.
+await client.SetSecretAsync("ApiKey", "abc123");
+
+// The secret is soft-deleted by default, not permanently erased.
+DeleteSecretOperation operation = await client.StartDeleteSecretAsync("OldPassword");
+// You need to wait for completion if you want to purge or recover the key.
+await operation.WaitForCompletionAsync();
+
+await client.PurgeDeletedSecretAsync(secretName);
+```
 
 Authentication using REST:
 
@@ -5679,13 +5707,21 @@ The `WWW-Authenticate` header parameters are:
 - `authorization`: OAuth2 authorization service address.
 - `resource`: Resource name (`https://vault.azure.net`) for the authorization request.
 
+### Authentication flow for "Get Secret" API
+<img src="https://learn.microsoft.com/en-us/azure/key-vault/media/authentication/authentication-flow.png" width="600">
+
+<br>
+
 ### Restricting access
 
-For secure, single-resource access to Azure Key Vault secrets, use System Managed Identities to avoid hardcoding credentials. Using managed identities or environment variables can expose them in your code.
+As best practice:
+For single-resource, use `System-Assigned Managed Identities` to avoid hardcoding credentials. Using environment variables can expose them in your code.
 
-Limit vault access to specific IPs via **virtual network service endpoints**.
+If multiple resources need the same identity, use `User-Assigned Managed Identities`.
 
-### Data Transit Encryption
+Limit vault access to specific IPs via using VNet integration and Private Endpoints to ensure the Key Vault isn't exposed to the public internet.
+
+### [Data Transit Encryption](https://learn.microsoft.com/en-us/azure/key-vault/general/basic-concepts#encryption-of-data-in-transit)
 
 Secure communication through **HTTPS** and **TLS** (min 1.2).
 
@@ -5698,6 +5734,7 @@ Create an access policy for your key vault that grants certificate permissions t
 ```sh
 az keyvault set-policy --name <your-key-vault-name> --upn user@domain.com --certificate-permissions delete get list create purge
 ```
+**📝 NOTE:** `--certificate-permissions` specifies the exact permissions that this user will have, but **only for certificates**. It does not grant any permissions for keys or secrets. UPN stands for User Principle Name.
 
 Store and retieve certificates:
 
@@ -5706,11 +5743,21 @@ var client = new CertificateClient(new Uri($"https://{keyVaultName}.vault.azure.
 
 // Create certificate
 var operation = await client.StartCreateCertificateAsync(certificateName, CertificatePolicy.Default);
+
+// Wait for the certificate creation to fully complete on the server.
+// This is necessary because the next step needs the certificate to exist.
 await operation.WaitForCompletionAsync();
 
 // Retrieve
 var certificate = await client.GetCertificateAsync(certificateName);
 ```
+
+| Method           | `GetCertificateAsync()`   | `DownloadCertificateAsync()`         |
+| ---------------- | ------------------------- | ------------------------------------ |
+| Purpose          | Get metadata + public key | Get full bundle + private key        |
+| Returns          | `KeyVaultCertificate`     | [`X509Certificate2`](https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.x509certificates.x509certificate2?view=net-9.0)                   |
+| Has Private Key? | No                        | Yes (if permissions allow)           |
+| Permissions      | `certificates/get`        | `certificates/get` and `secrets/get` |
 
 ## Best Practices
 
@@ -5718,16 +5765,27 @@ var certificate = await client.GetCertificateAsync(certificateName);
 - Restrict vault access to authorized applications and users. (`az keyvault set-policy --name <YourKeyVaultName> --object-id <PrincipalObjectId> --secret-permissions get list`)
 - Regularly backup your vault. (`az keyvault key backup --vault-name <YourKeyVaultName> --name <KeyName> --file <BackupFileName>`)
 - Enable logging and alerts.
-- Enable **soft-delete** and **purge protection** to keep secrets for 7-90 days and prevent forced deletion. Charges apply for HSM-keys in the last 30 days of use. Operations are disabled on deleted objects, and no charges apply. (NOTE: _soft-delete_ increased security, but also _increases storage cost_!)
+- Enable **soft-delete** and **purge protection** to keep secrets for 7-90 days and prevent forced deletion. 
 
   ```sh
-  az keyvault update --name <YourKeyVaultName> --enable-soft-delete true
-  az keyvault update --name <YourKeyVaultName> --enable-purge-protection true
+    az keyvault update --subscription {SUBSCRIPTION ID} -g {RESOURCE GROUP} -n {VAULT NAME} --enable-soft-delete true
+    az keyvault update --subscription {SUBSCRIPTION ID} -g {RESOURCE GROUP} -n {VAULT NAME} --enable-purge-protection true
   ```
 
-## [Disaster and recovery](https://learn.microsoft.com/en-us/azure/key-vault/general/disaster-recovery-guidance)
+## Charging
 
-Redundancy: Data is usually replicated within the primary region and to a secondary region (except for some countries where data regulation require to keep it in the same region with ZRS). For AKV Premium, data from HSMs is replicated to only two regions. If a primary Azure region becomes unavailable, requests are automatically rerouted to a secondary region. Note that some regions don't support failover and the key vault becomes read-only during this time. Users in these regions should prepare for recovery plans.
+- Charges apply for HSM-keys (charge per key version per month) in the last 30 days of use. After that, since the object is in deleted state no operations can be performed against it, so no charge will apply. 
+- Operations are disabled on deleted objects, and no charges apply. (NOTE: _soft-delete_ increases security, but also _increases storage cost_!)
+
+**📝 NOTE:** Soft-delete can't be turned off for [Managed HSM, NOT standard Key Vault](https://learn.microsoft.com/en-us/azure/key-vault/managed-hsm/soft-delete-overview) resources. Soft-deleted Managed HSM resources will continue to be billed at their full hourly rate until they're purged.
+
+## [Disaster and recovery](https://learn.microsoft.com/en-us/azure/key-vault/general/disaster-recovery-guidance)
+Below applies for both Standard and Premium tiers.
+
+| Region Type          | Within-Region Replication                          | Cross-Region Replication         | Behavior During Regional Failure                                          | Examples                                      |
+| -------------------- | -------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------- |
+| **Paired Regions**   | Yes (Zone-Redundant Storage in AZ-enabled regions) | Yes (automatic to paired region) | Key Vault becomes **read-only** during failover to prevent data conflicts | East US ↔ West US, North Europe ↔ West Europe |
+| **Unpaired Regions** | Yes (Zone-Redundant Storage in AZ-enabled regions) | No                               | Service becomes **unavailable** until region recovers                     | Brazil South, West US 3, Brazil Southeast     |
 
 ## Disk Encryption ([Windows](https://learn.microsoft.com/en-us/azure/virtual-machines/windows/disk-encryption-key-vault?tabs=azure-portal), [Linux](https://learn.microsoft.com/en-us/azure/virtual-machines/linux/disk-encryption-key-vault?tabs=azure-portal))
 
@@ -5743,59 +5801,111 @@ az keyvault create --name "<keyvault-id>" --resource-group $resourceGroup --loca
 
 # Update the key vault's advanced access policies
 az keyvault update --name "<keyvault-id>" --resource-group $resourceGroup --enabled-for-disk-encryption "true"
-# Enables the Microsoft.Compute resource provider to retrieve secrets from this key vault when this key vault is referenced in resource creation, for example when creating a virtual machine.
+# Optional: Enables the 'Microsoft.Compute' resource provider to retrieve secrets from this key vault when this key vault is referenced in resource creation, for example when creating a virtual machine.
 az keyvault update --name "<keyvault-id>" --resource-group $resourceGroup --enabled-for-deployment "true"
-# Allow Resource Manager to retrieve secrets from the vault.
+# Optional: Allow Resource Manager to retrieve secrets from the vault.
 az keyvault update --name "<keyvault-id>" --resource-group $resourceGroup --enabled-for-template-deployment "true"
 
-# This step is optional. When a key encryption key (KEK) is specified, Azure Disk Encryption uses that key to wrap the encryption secrets before writing to Key Vault.
+# Optional: When a key encryption key (KEK) is specified, Azure Disk Encryption uses that key to wrap the encryption secrets before writing to Key Vault.
 az keyvault key create --name "myKEK" --vault-name "<keyvault-id>" --kty RSA --size 4096
 
 # Enable disk encryption:
-## Optionally use KEK by name
-az vm encryption enable -g $resourceGroup --name "myVM" --disk-encryption-keyvault "<keyvault-id>" --key-encryption-key "myKEK"
-## Optionally use KEK by url
-## Obtain <kek-url>
-## az keyvault key show --vault-name "<keyvault-id>" --name "myKEK" --query "key.kid"
-## az vm encryption enable -g $resourceGroup --name "MyVM" --disk-encryption-keyvault "<keyvault-id>" --key-encryption-key-url <kek-url> --volume-type All
+## Option 1: use KEK by name
+az vm encryption enable -g $resourceGroup --name "myVM" --disk-encryption-keyvault "<keyvault-id-or-name>" --key-encryption-key "myKEK"
+## Option 2: use KEK by url
+## Obtain <kek-url> as pre-step
+az keyvault key show --name <keyvault-id> --vault-name <vault-name> --query key.kid -o tsv
+az vm encryption enable -g $resourceGroup --name "MyVM" --disk-encryption-keyvault "<keyvault-id-or-name>" --key-encryption-key "https://myvault.vault.azure.net/keys/mykey/<key-version>" --volume-type All
 ```
+
+**📝 NOTE:** If you have previously used Azure Disk Encryption with Microsoft Entra ID to encrypt a VM, you must continue using this option to encrypt your VM.
 
 ## [Logging](https://learn.microsoft.com/en-us/azure/key-vault/key-vault-insights-overview)
 
 ### [Monitoring Key Vault with Azure Event Grid](https://learn.microsoft.com/en-us/azure/key-vault/general/event-grid-overview)
 
-`Portal > All Services > Key Vaults > key vault > Events > Event Grid Subscriptions > + Event Subscription` and fill in the details including name, event types, and endpoint (like an Azure Function).
+Key Vault events can be identified by property name which starts with [`Microsoft.KeyVault`](https://learn.microsoft.com/en-us/azure/event-grid/event-schema-key-vault?tabs=cloud-event-schema).
+
+`Portal > All Services > Key Vaults > key vault > Events > Event Grid Subscriptions > + Event Subscription` and fill in the details including name, event types, and endpoint.
+
+**Event Flow**: Key Vault → Event Grid → Below Function → Log Analytics/Alerts
 
 ```cs
-[FunctionName("KeyVaultMonitoring")]
-public static async Task<IActionResult> Run(
-    [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req, ILogger log)
+// This file contains the Azure Function that listens for Key Vault events.
+public static class KeyVaultMonitoring
 {
-    var requestBody = await new StreamReader(req.Body).ReadToEndAsync();
-    var eventGridEvent = EventGridEvent.Parse(new BinaryData(requestBody));
-
-    switch(eventGridEvent.EventType)
+    /// <summary>
+    /// This function is triggered by an HTTP request.
+    /// It's designed to be used as a Webhook endpoint for an Azure Event Grid subscription.
+    /// Event Grid will POST a JSON array of events to this endpoint.
+    /// </summary>
+    [FunctionName("KeyVaultMonitoring")]
+    public static async Task<IActionResult> Run(
+        // [HttpTrigger] defines this function as an HTTP endpoint.
+        // - AuthorizationLevel.Function: Requires a Function API key for security.
+        // ILogger for writing logs to Azure Monitor.
+        // Event Grid sends POST for both:
+        // 1. Validation event (once, during subscription setup)
+        // 2. Actual Key Vault events (ongoing)
+        // Common practice for webhook endpoints to accept GET for e.g.: quick browser-based testing (just paste URL in browser)
+        [HttpTrigger(AuthorizationLevel.Function, "get", "post", Route = null)] HttpRequest req, ILogger log)
     {
-        case SystemEventNames.KeyVaultCertificateNewVersionCreated:
-        case SystemEventNames.KeyVaultSecretNewVersionCreated:
-            log.LogInformation($"New Key Vault secret/certificate version created event. Data: {eventGridEvent.Data}"); break;
-        case SystemEventNames.KeyVaultKeyNewVersionCreated:
-            log.LogInformation($"New Key Vault key version created event. Data: {eventGridEvent.Data}"); break;
-        default:
-            log.LogInformation($"Event Grid Event of type {eventGridEvent.EventType} occurred, but it's not processed."); break;
-    }
+        log.LogInformation("KeyVaultMonitoring function processed a request.");
 
-    return new OkResult();
+        // --- Read and Parse the Incoming Event ---
+
+        // Read the raw JSON payload from the HTTP request body.
+        var requestBody = await new StreamReader(req.Body).ReadToEndAsync();
+
+        // Parse the Event Grid event from the JSON payload
+        // BinaryData provides efficient handling of the JSON string
+        var eventGridEvent = EventGridEvent.Parse(new BinaryData(requestBody));
+        
+        // --- Process the Event ---
+
+        // Use a switch statement on the EventType property to determine
+        // what kind of Key Vault event just occurred.
+        switch(eventGridEvent.EventType)
+        {
+            // A new version of a certificate was created.
+            case SystemEventNames.KeyVaultCertificateNewVersionCreated:
+            // A new version of a secret was created.
+            case SystemEventNames.KeyVaultSecretNewVersionCreated:
+                log.LogInformation($"A new secret or certificate version was created.");
+                // eventGridEvent.Data contains the specific payload for this event,
+                // which includes the VaultName, ObjectName, etc.
+                log.LogInformation($"Event Data: {eventGridEvent.Data}");
+                
+                // TODO: Add your logic here.
+                // e.g., send an email, update a database, post to Teams.
+                break;
+
+            // A new version of a key was created.
+            case SystemEventNames.KeyVaultKeyNewVersionCreated:
+                log.LogInformation($"A new key version was created.");
+                log.LogInformation($"Event Data: {eventGridEvent.Data}");
+                
+                // TODO: Add your logic here.
+                break;            
+
+            // This is not an error - it's normal to receive events you don't process
+            // Event Grid may send validation events or other system events
+            default:
+                log.LogInformation($"Event of type '{eventGridEvent.EventType}' received but not processed.");
+                log.LogInformation($"Event data: {eventGridEvent.Data}");
+                break;
+        }
+        
+        // Return HTTP 200 OK to acknowledge successful receipt to Event Grid
+        // Returning errors causes Event Grid to retry, which can cause duplicate processing
+        return new OkResult();
+    }
 }
 ```
 
 ## Working with KeyVault
 
 ```cs
-// Fetching a secret
-var secretClient = new SecretClient(vaultUri: new Uri(vaultUrl), credential: new DefaultAzureCredential());
-KeyVaultSecret secret = await secretClient.GetSecretAsync("YourSecretName");
-
 var keyClient = new KeyClient(vaultUri: new Uri(vaultUrl), credential: new DefaultAzureCredential());
 // Creating a new key
 KeyVaultKey key = await keyClient.GetKeyAsync("YourKeyName");
@@ -5813,18 +5923,18 @@ DecryptResult decryptResult = cryptoClient.Decrypt(EncryptionAlgorithm.RsaOaep, 
 
 # [Azure Managed Identities](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/)
 
-Enable Azure App Services-based apps to access other services without handling credentials. These identities are _Azure-exclusive_ and _can't be used with other cloud providers_ like AWS or GCP.
+Enables [`Azure-hosted apps/VMs`](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/managed-identities-status) to access other services without handling credentials. These identities are Azure-exclusive and can't be used with other cloud providers.
 
-**Mandatory**: In Azure Portal, navigate to `Settings > Access policies > Add Access Policy` to allow your app access. Select permissions and identity name and type. Policy removal may take 24hrs due to caching.
+**📝 NOTE:** If you change a managed identity's group/role membership to add or remove permissions, you must wait up to 24 hours.
 
 | Property                       | System-assigned managed identity                                                                                                                                       | User-assigned managed identity                                                                                                                                                                                                                                                                                                                                    |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Creation                       | Created as part of an Azure resource (for example, Azure Virtual Machines or Azure App Service).                                                                       | Created as a stand-alone Azure resource.                                                                                                                                                                                                                                                                                                                          |
+| Creation                       | Created as part of an Azure resource (e.g. `Azure Virtual Machines` or `Azure App Service`).                                                                       | Created as a stand-alone Azure resource.                                                                                                                                                                                                                                                                                                                          |
 | Life cycle                     | Shared life cycle with the Azure resource.<br>Deleted when the parent resource is deleted.<br>Cannot be explicitly deleted.                                            | Independent life cycle.<br>Must be explicitly deleted.                                                                                                                                                                                                                                                                                                            |
 | Sharing across Azure resources | Can’t be shared.<br>It can only be associated with a single Azure resource.                                                                                            | Can be shared.<br>The same user-assigned managed identity can be associated (shared) with more than one Azure resource.                                                                                                                                                                                                                                           |
-| Common use cases               | Workloads contained within a single Azure resource.<br>Workloads needing independent identities.<br>For example, an application that runs on a single virtual machine. | Workloads that run on multiple resources and can share a single identity.<br>Workloads needing pre-authorization to a secure resource, as part of a provisioning flow.<br>Workloads where resources are recycled frequently, but permissions should stay consistent.<br>For example, a workload where multiple virtual machines need to access the same resource. |
+| Common use cases               | Workloads contained within a single Azure resource.<br>Workloads needing independent identities.<br>For example, an application that runs on a single virtual machine. | Workloads that run on multiple resources and can share a single identity.<br>[Workloads needing pre-authorization](https://gemini.google.com/share/3a088a2cbf6f) to a secure resource, as part of a provisioning flow.<br>Workloads where resources are recycled frequently, but permissions should stay consistent.<br>For example, a workload where multiple virtual machines need to access the same resource. |
 
-**If you have multi-tenant setup, use Application Service Principal!**
+**📝 NOTE:** If you have multi-tenant setup, use `Application Service Principal`!
 
 ## [Role-based access control (Azure RBAC)](https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-portal#assign-a-user-as-an-administrator-of-a-subscription)
 
