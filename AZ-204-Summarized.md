@@ -890,65 +890,68 @@ az appconfig kv export \
 
 ## [Azure App Service plans](https://learn.microsoft.com/en-us/azure/app-service/overview-hosting-plans)
 
+Tier Progression: Free → Shared → Basic → Standard → PremiumV(n) → IsolatedV(n)
 ### Features
 
-- Multi-tenant workers: Free and Shared
+- [Multi-tenant workers](https://learn.microsoft.com/en-us/azure/app-service/overview-hosting-plans#:~:text=Description-,Shared%20compute,-Free%2C%20Shared): Free and Shared
 - Custom DNS Name: Shared+
-- Dedicated workers: Basic+
-- SSL: Basic+
+- [Dedicated workers](https://learn.microsoft.com/en-us/azure/app-service/overview-hosting-plans#:~:text=and%20testing%20purposes.-,Dedicated%20compute,-Basic%2C%20Standard%2C%20Premium): Basic+
 - Scalability (scaling out): Basic+
-- TLS Bindings: Basic+
+- TLS/SSL (HTTPS): Basic+
 - Always On: Basic+
 - Free managed certificate: Basic+
 - Autoscale: Standard+
 - Staging environments (deployment slots): Standard+
-- Linux: Standard+
+- Linux: Basic+ (Free tier supports for limited resource only)
 - AppServiceFileAuditLogs: Premium+
 - AppServiceAntivirusScanAuditLogs: Premium+
 - Automatic scaling: PremiumV2+
 - Single-tenant setup (App Service Environment - ASE): Isolated+
-- Dedicated Azure Virtual Networks: Isolated+
-- Maximum scale-out: Isolated+
+- [Virtual Networks (VNet Integration)](https://learn.microsoft.com/en-us/azure/app-service/overview-vnet-integration#:~:text=inbound%20private%20access.-,The%20virtual%20network%20integration%20feature,-%3A): Basic+ 
+- Full Network Isolation: Isolated+
+- Maximum scale-out: IsolatedV2+
 
 The roles that handle incoming HTTP or HTTPS requests are called _front ends_. The roles that host the customer workload are called _workers_.
 
 ### Tiers
 
-- **Shared compute**: **Free** (F1) and **Shared** (D1) tiers run apps on the same Azure VM with other customer apps, sharing resources and limited CPU quotas. ⭐: _development_ and _testing_ only. Each app is charged for _CPU quota_.
+- **Shared compute**: **Free** (F1) and **Shared** (D1) tiers run apps on the same Azure VM with other customer apps, [sharing resources and limited CPU quotas](https://docs.azure.cn/en-us/azure-resource-manager/management/azure-subscription-service-limits#azure-app-service-limits:~:text=is%20999%20GB.-,CPU%20time,-(5%20minutes)). ⭐: _development_ and _testing_ only. The Free tier is $0, and the Shared tier is a fixed monthly cost per app that includes a limited CPU quota.
 
-- **Dedicated compute**: **Basic** ⏺️ (B1), **Standard** (S1), **Premium** (P1V1), **PremiumV2** (P1V2), and **PremiumV3** (P1V3) tiers utilize dedicated Azure VMs. Apps within the same App Service plan share compute resources. Higher tiers provide more VM instances for scale-out capabilities. Scaling out (_autoscale_) simply adds another VM with the same applications and services. _Each VM instance_ is charged.
+- **Dedicated compute**: **Basic** ⏺️ (B1), **Standard** (S1), **Premium** (P1V1), **PremiumV2** (P1V2), and **PremiumV3** (P1V3) tiers utilize dedicated Azure VMs. Apps within the same App Service plan share compute resources. Higher tiers provide more powerful VM instances and allow you to scale out to a higher maximum number of instances. Scaling out (_autoscale_) simply adds another VM running the same applications and services. You're charged based on the App Service Plan tier and the number of instances.
 
-- **Isolated** (I1): The **Isolated** and **IsolatedV2** tiers run dedicated Azure VMs on _dedicated Azure Virtual Networks_. It provides network isolation on top of compute isolation to your apps. It provides the _maximum scale-out capabilities_. Charging is based on the _number of isolated workers that run your apps_.
+- **Isolated** (I1): The **Isolated** and **IsolatedV2** tiers run dedicated Azure VMs on _dedicated Azure Virtual Networks_. It provides network isolation on top of compute isolation to your apps. IsolatedV2 provides the _maximum scale-out capabilities_. Charging is [mostly](https://techcommunity.microsoft.com/blog/appsonazureblog/asev3-vs-asev2---difference-overview/3276225#:~:text=Total(ASPs)%3A200-,Pricing,-Pay%20for%20each) based on the _number of isolated workers that run your apps_.
 
-App Service plans that have no apps associated with them still incur charges because they continue to reserve the configured VM instances.
+**📝 NOTE:** App Service plans that have no apps associated with them still incur charges because they continue to reserve the configured VM instances.
 
-Deployment slots, diagnostic logs, perforing backups, apps in the same App Service plan, and WebJobs _run on the same VM instances_.
+All apps, deployment slots, WebJobs, backups, and diagnostic logs in an App Service plan share the _same VM instances_.
 
 When to isolate an app into a new App Service plan:
 
 - The app is resource-intensive.
 - You want to scale the app independently from the other apps in the existing plan.
-- The app needs resource in a different geographical region.
+- The app needs resources in a different geographical region.
 
-#### [Move App Service plan](https://learn.microsoft.com/en-us/azure/app-service/app-service-plan-manage)
+#### [Move App To Another Plan](https://learn.microsoft.com/en-us/azure/app-service/app-service-plan-manage#move-an-app-to-another-app-service-plan)
 
-By cloning it. Source plan and destination plan must be in the same resource group, geographical region, same OS type, and supports the currently used features.
+Source plan and destination plan must be in the same resource group, geographical region, same OS type, and supports the currently used features.
+This can be done on Portal or [Powershell](https://docs.azure.cn/en-us/app-service/app-service-web-app-cloning#clone-an-existing-app), [it is not supported via CLI](https://learn.microsoft.com/en-us/answers/questions/659842/moving-an-azure-app-service-to-another-existing-ap#:~:text=Unfortunately%2C%20we%20can%27t%20change%20the%20App%20Service%20Plan%20through%20CLI%2C%20otherwise%2C%20it%20would%20have%20shown%20more%20information.).
 
-```ps
-New-AzResourceGroup -Name DestinationAzureResourceGroup -Location $destinationLocation
-New-AzAppServicePlan -Location $destinationLocation -ResourceGroupName DestinationAzureResourceGroup -Name DestinationAppServicePlan -Tier Standard
+If you attempt to [move](https://learn.microsoft.com/en-us/azure/app-service/app-service-plan-manage#:~:text=Important-,If%20you%20move%20an%20app,-from%20a%20higher) an app from a higher-tiered plan to a lower-tiered plan, e.g. from D1 to F1, it might fail due to unsupported features in the target plan.
 
-$srcapp = Get-AzWebApp -Name MyAppService -ResourceGroupName SourceAzureResourceGroup
-$destapp = New-AzWebApp -SourceWebApp $srcapp -AppServicePlan DestinationAppServicePlan -Location $destinationLocation -ResourceGroupName DestinationAzureResourceGroup -Name MyAppService2
-```
+**📝 NOTE:** For [moving to a different region](https://learn.microsoft.com/en-us/azure/app-service/app-service-plan-manage#move-an-app-to-a-different-region), you'd need to clone to a new app (can't directly move).
 
 ### [Scaling](https://learn.microsoft.com/en-us/azure/app-service/manage-automatic-scaling?tabs=azure-portal)
 
-Settings affect all apps in your App Service plan
+Settings affect all apps in your App Service plan.
 
-- **Manual scaling** (Basic+) - one time events (example: doing X on this date)
-- **Autoscale** (Standard+) - for predictable changes of application load, based on schedules (every X days/weeks/months) or resources
-- **Automatic scaling** (PremiumV2+) - like autoscale, but allows avoiding _cold start_ issues with _pre-warmed_ and _always ready_ instances
+#### Azure App Service Scaling Modes
+
+| Scaling Mode | Description | Typical Tiers |
+|--------------|-------------|---------------|
+| **Manual** | You explicitly set the number of instances (VMs). Azure won't change it unless you do it yourself. | Basic+ |
+| **Autoscale (Rule-based)** | Azure automatically scales out/in based on rules you define (e.g., CPU > 70% for 10 mins). | Standard+ |
+| **Automatic (Platform-managed)** | Azure completely manages scaling for you — based on real-time HTTP traffic — no user-defined rules needed. | Premium V2+ |
+
 
   ```sh
   az appservice plan update --name $appServicePlanName --resource-group $resourceGroup \
@@ -965,22 +968,13 @@ Horizontal scaling: Adding/removing virtual machines.
 
 Vertical scaling: Scale up/down - when changing app service plan
 
-[**Flapping**](https://learn.microsoft.com/en-us/azure/azure-monitor/autoscale/autoscale-flapping): a loop condition where a scale event triggers its opposite in a series of alternating events.
-
-Setting up a scaling rule:
-
-- Switch the web app to the Standard App Service Plan (for Autoscale you need Premium)
-- Activate autoscaling for the Web App
-- Create a scaling rule
-- Set up a scaling condition
+[**Flapping**](https://learn.microsoft.com/en-us/azure/architecture/best-practices/auto-scaling?WT.mc_id=AZ-MVP-5004334#:~:text=Avoid%20flapping%20where,scale%2Din%20thresholds.): a loop condition where a scale event triggers its opposite in a series of alternating events.
 
 ### Continuous integration/deployment
 
 Built-in CI/CD with Git (Azure DevOps, third-party, local), FTP, and container registries (ACR, third-party).
 
 ## [Deployment slots](https://learn.microsoft.com/en-us/azure/app-service/deploy-staging-slots)
-
-Require Standard+.
 
 All of the slots for a web app share the same deployment plan and virtual machines. They have different host names.
 
