@@ -252,7 +252,7 @@ When you want to add some information from external system to the current respon
                 <set-variable
                   name="userprofile"
                   value="@(((IResponse)context.Variables["userprofileresponse"]).Body.As<string>())" />
-                  
+
                 <!-- Store to cache -->
                 <cache-store-value
                   key="@("userprofile-" + context.Variables["enduserid"])"
@@ -284,12 +284,13 @@ When you want to add some information from external system to the current respon
 
 Use the `authentication-managed-identity` policy to authenticate with a service through managed identity. It gets an access token from Microsoft Entra ID and sets it in the `Authorization` header using the Bearer scheme. The token is cached until it expires. If no client-id is given, the system-assigned identity is used.
 
-Example: 
+Example:
+
 ```xml
-<authentication-managed-identity 
+<authentication-managed-identity
     resource="azure-resource-you-want-to-access, e.g.: https://storage.azure.com"
-    client-id="your-user-assigned-managed-identity-client-id" 
-    output-token-variable-name="accessToken" 
+    client-id="your-user-assigned-managed-identity-client-id"
+    output-token-variable-name="accessToken"
     ignore-error="false" />
 ```
 
@@ -351,7 +352,7 @@ In the _Consumption_ tier client certificates must be _manually enabled_ on the 
 
 **📝 NOTE:** The _CA certificates_ blade in the APIM portal only applies to the managed gateway. Self-Hosted Gateways (SHGW) manage their own trust. To make an SHGW trust a client CA, you must upload the certificate to your APIM instance and then use the specific [`Gateway Certificate Authority - Create Or Update`](https://learn.microsoft.com/en-us/rest/api/apimanagement/gateway-certificate-authority/create-or-update?view=rest-apimanagement-2024-05-01&tabs=HTTP) API to explicitly link that certificate to the SHGW resource.
 
-**📝 NOTE:** SHGW is designed to survive temporary disconnects from the control plane. It continues to operate using the last configuration it successfully downloaded (which is held in-memory). When local configuration backup is enabled, new pods can start using the saved local copy. Otherwise, any new pods that try to start during the outage cannot pull a configuration and will fail to initialize.  
+**📝 NOTE:** SHGW is designed to survive temporary disconnects from the control plane. It continues to operate using the last configuration it successfully downloaded (which is held in-memory). When local configuration backup is enabled, new pods can start using the saved local copy. Otherwise, any new pods that try to start during the outage cannot pull a configuration and will fail to initialize.
 
 #### Check the thumbprint against certificates uploaded to API Management
 
@@ -426,42 +427,42 @@ New-AzApiManagement -ResourceGroupName RESOURCE_GROUP -Name NAME -Location LOCAT
 
 **📝 NOTE:** The _rate-limit-by-key_ and _quota-by-key_ policies aren't available in the Consumption tier of Azure API Management.
 
-| Name                               | Example                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Notes                                                                                                                                                                                                                                                                                                                                 | Sections                    |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
-| Check HTTP header                  | `<check-header name="header name" failed-check-httpcode="code" failed-check-error-message="message" ignore-case="true \| false">`<br>&nbsp;&nbsp;`<value>Value1</value>`<br>&nbsp;&nbsp;`<value>Value2</value>`<br>`</check-header>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | The check passes if the header's value matches any one of the values in the list. Otherwise, the policy immediately terminates the request and sends a response to the caller with provided `failed-check-...` details.                                                                                                                                                                                                                    | inbound                     |
-| Get authorization context          | `<get-authorization-context`<br>&nbsp;&nbsp;`provider-id="authorization provider id"`<br>&nbsp;&nbsp;`authorization-id="authorization id"`<br>&nbsp;&nbsp;`context-variable-name="variable name"`<br>&nbsp;&nbsp;`identity-type="managed \| jwt"`<br>&nbsp;&nbsp;`identity="JWT bearer token"`<br>&nbsp;&nbsp;`ignore-error="true \| false" />`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `context-variable-name` is the name of the context variable to receive the Authorization object (`{accessToken: string, claims: Record<string, object>}`). Configure `identity-type=jwt` when the access policy for the authorization is assigned to a service principal. Only `/.default` scope (`app-only` token) is supported for the JWT. | inbound                     |
-| Restrict caller IPs                | `<ip-filter action="allow \| forbid">`<br>&nbsp;&nbsp;`<address>address</address>`<br>&nbsp;&nbsp;`<address-range from="address" to="address" />`<br>`</ip-filter>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | At least one `address` or `address-range` element is required.                                                                                                                                                                                                                                                                        | inbound                     |
-| Validate Microsoft Entra ID token  | `Simple token validation: <validate-azure-ad-token tenant-id="{{aad-tenant-id}}">`<br>&nbsp;&nbsp;`<client-application-ids>`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<application-id>{{aad-client-application-id}}</application-id>`<br>&nbsp;&nbsp;`</client-application-ids>`<br>`</validate-azure-ad-token>`<br>`Validate that audience and claim are correct: <validate-azure-ad-token tenant-id="{{aad-tenant-id}}" output-token-variable-name="jwt">`<br>&nbsp;&nbsp;`<client-application-ids>`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<application-id>{{aad-client-application-id}}</application-id>`<br>&nbsp;&nbsp;`</client-application-ids>`<br>&nbsp;&nbsp;`<audiences>`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<audience>@(context.Request.OriginalUrl.Host)</audience>`<br>&nbsp;&nbsp;`</audiences>`<br>&nbsp;&nbsp;`<required-claims>`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<claim name="ctry" match="any">`<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`<value>US</value>`<br>&nbsp;&nbsp;&nbsp;&nbsp;`</claim>`<br>&nbsp;&nbsp;`</required-claims>`<br>`</validate-azure-ad-token>`                                                        | To validate a JWT that was provided by another identity provider, use the generic `validate-jwt`. You can secure the whole API with Entra ID authentication by applying the policy on the API level, or you can apply it on the API operation level and use claims for more granular control.                                         | inbound                     |
-| Validate client certificate        | `<validate-client-certificate`<br>&nbsp;&nbsp;`validate-revocation="true \| false"`<br>&nbsp;&nbsp;`validate-trust="true \| false"`<br>&nbsp;&nbsp;`validate-not-before="true \| false"`<br>&nbsp;&nbsp;`validate-not-after="true \| false"`<br>&nbsp;&nbsp;`ignore-error="true \| false">`<br>&nbsp;&nbsp;`<identities>`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<identity `<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`thumbprint="certificate thumbprint"`<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`serial-number="certificate serial number"`<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`common-name="certificate common name"`<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`subject="certificate subject string"`<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`dns-name="certificate DNS name"`<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`issuer-subject="certificate issuer"`<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`issuer-thumbprint="certificate issuer thumbprint"`<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`issuer-certificate-id="certificate identifier" />`<br>&nbsp;&nbsp;`</identities>`<br>`</validate-client-certificate>` | All attributes are Optional (each has defaults), `identities` too                                                                                                                                                                                                                                                                                                          | inbound                     |
-| Control flow                       | `<choose>`<br>&nbsp;&nbsp;`<when condition="Boolean expression \| Boolean constant">`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<!— one or more policy statements to be applied if the above condition is true  -->`<br>&nbsp;&nbsp;`</when>`<br>&nbsp;&nbsp;`<when condition="Boolean expression \| Boolean constant">`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<!— one or more policy statements to be applied if the above condition is true  -->`<br>&nbsp;&nbsp;`</when>`<br>&nbsp;&nbsp;`<otherwise>`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<!— one or more policy statements to be applied if none of the above conditions are true  -->`<br>&nbsp;&nbsp;`</otherwise>`<br>`</choose>`                                                                                                                                                                                                                                                                                                                                                                                                                                                     | The choose policy must contain at least one `<when/>` element. The `<otherwise/>` element is optional.                                                                                                                                                                                                                                | Any                         |
-| Limit concurrency                  | `<limit-concurrency key="expression" max-count="number">`<br>&nbsp;&nbsp;`<!— nested policy statements -->`<br>`</limit-concurrency>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Prevents enclosed policies from executing by more than the specified number of requests at any time. When that number is exceeded, new requests will fail immediately with `429 Too Many Requests`.<br>E.g. for given: `<limit-concurrency key="@((string)context.Variables["connectionId"])" max-count="10">`, requests with _connectionId="A"_ and _connectionId="B"_ => Total number of requests are allowed to be >=**20** at a certain point in time.                                                 | Any                         |
-| Rate limit                         | `<rate-limit-by-key calls="number"`<br>&nbsp;&nbsp;`counter-key="key value" `<br>&nbsp;&nbsp;`renewal-period="seconds"`<br>`/>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Renewal period is in seconds. Raises `429 Too Many Requests`                                                                                                                                                                                                                                                                          | inbound                     |
-| Quota                              | `<quota-by-key counter-key="key value" bandwidth="kilobytes" renewal-period="seconds" />`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Bandwidth is in KB, renewal period is in seconds                                                                                                                                                                                                                                                                                      | inbound                     |
-| Emit custom metrics                | `<emit-metric name="name of custom metric" value="value of custom metric" namespace="metric namespace">`<br>&nbsp;&nbsp;`<dimension name="dimension name" value="dimension value" />`<br>`</emit-metric>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Sends custom metrics in the specified format to Application Insights. You can configure at most 10 custom dimensions for this policy. Counts toward the usage limits for custom metrics per region in a subscription.                                                                                                                 | Any                         |
-| Forward request                    | `<forward-request http-version="1 \| 2or1 \| 2" timeout="time in seconds" continue-timeout="time in seconds" follow-redirects="false \| true" buffer-request-body="false \| true" buffer-response="true \| false" fail-on-error-status-code="false \| true"/>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | By default, this policy is set at the global scope.                                                                                                                                                                                                                                                                                   | backend                     |
-| Log to event hub                   | `<log-to-eventhub logger-id="id of the logger entity" partition-id="index of the partition where messages are sent" partition-key="value used for partition assignment">`<br>`Expression returning a string to be logged`<br>`</log-to-eventhub>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | The policy is not affected by Application Insights sampling. All invocations of the policy will be logged. Max message size: 200 KB (otherwise truncated).                                                                                                                                                                            | Any                         |
-| Mock response                      | `<mock-response status-code="code" content-type="media type"/>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Cancels normal pipeline execution. It prioritizes response content examples, using schemas when available and generating sample responses (or no content is returned). Policy expressions can't be used in attribute values for this policy.                                                                                          | inbound, outbound, on-error |
-| Retry                              | `<retry`<br>&nbsp;&nbsp;`condition="Boolean expression or literal"`<br>&nbsp;&nbsp;`count="number of retry attempts"`<br>&nbsp;&nbsp;`interval="retry interval in seconds"`<br>&nbsp;&nbsp;`max-interval="maximum retry interval in seconds"`<br>&nbsp;&nbsp;`delta="retry interval delta in seconds"`<br>&nbsp;&nbsp;`first-fast-retry="boolean expression or literal">`<br>&nbsp;&nbsp;`<!-- One or more child policies. No restrictions. -->`<br>`</retry>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Executes its child policies once and then retries their execution until the `retry` condition becomes `false` or retry `count` is exhausted. When only the `interval` and `delta` are specified, the wait time between retries increases: `interval + (count - 1)*delta`.                                                             | Any                         |
-| Return response                    | `<return-response response-variable-name="existing context variable">`<br>&nbsp;&nbsp;`<set-status>...</set-status>`<br>&nbsp;&nbsp;`<set-header>...</set-header>`<br>&nbsp;&nbsp;`<set-body>...</set-body>`<br>`</return-response>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Pipeline cancelation, body removal, custom or default response return to caller. Context variable and policy statements modify response if both provided.                                                                                                                                                                             | Any                         |
-| [Send request](https://learn.microsoft.com/en-us/azure/api-management/send-request-policy)                       | `<send-request mode="new \| copy" response-variable-name="" timeout="seconds" ignore-error="false \| true">`<br>&nbsp;&nbsp;`<set-url>request URL</set-url>`<br>&nbsp;&nbsp;`<set-method>...</set-method>`<br>&nbsp;&nbsp;`<set-header>...</set-header>`<br>&nbsp;&nbsp;`<set-body>...</set-body>`<br>&nbsp;&nbsp;`<authentication-certificate thumbprint="thumbprint" />`<br>&nbsp;&nbsp;`<proxy>...</proxy>`<br>`</send-request>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Default timeout: 60sec<br>In `set-method`, policy expressions aren't allowed.                                                                                                                                                                                                                                                                                                                | Inbound                         |
-| Set HTTP proxy                     | `<proxy url="http://hostname-or-ip:port" username="username" password="password" />`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Only HTTP is supported between the gateway and the proxy. Basic and NTLM authentication only. `username` and `password` are not required.                                                                                                                                                                                             | inbound                     |
-| Set request method                 | `<set-method>HTTP method</set-method>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Policy expressions are allowed.                                                                                                                                                                                                                                                                                                       | inbound, on-error           |
-| Set Status Code                    | `<set-status code="HTTP status code" reason="description"/>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | -                                                                                                                                                                                                                                                                                                                                     | Any                         |
-| Set Variable                       | `<set-variable name="variable name" value="Expression \| String literal" />`<br>`<set-variable name="IsMobile" value="@(context.Request.Headers.GetValueOrDefault("User-Agent","").Contains("iPad") \|\| context.Request.Headers.GetValueOrDefault("User-Agent","").Contains("iPhone"))" />`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | If the expression contains a literal it will be converted to a string.                                                                                                                                                                                                                                                                 | Any                         |
-| Authenticate with Basic            | `<authentication-basic username="username" password="password" />`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Sets the HTTP Authorization header. Recommended using named values to provide credentials, with secrets protected in a key vault.                                                                                                                                                                                                     | inbound                     |
-| [Authenticate with managed identity](https://learn.microsoft.com/en-us/azure/api-management/authentication-managed-identity-policy) | `<authentication-managed-identity resource="resource" client-id="clientid of user-assigned identity" output-token-variable-name="token-variable" ignore-error="true\|false"/>`<br>`<authentication-managed-identity resource="AD_application_id" output-token-variable-name="msi-access-token" ignore-error="false" />`<br>`<!--Application (client) ID of your own Entra ID Application-->`<br>`<set-header name="Authorization" exists-action="override">`<br>&nbsp;&nbsp;`<value>@("Bearer " + (string)context.Variables["msi-access-token"])</value>`<br>`</set-header>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | After successfully obtaining the token, the policy will set the value of the token in the Authorization header using the Bearer scheme. Both system-assigned identity and any of the multiple user-assigned identities can be used to request a token.                                                                                | inbound                     |
-| Get from cache                     | `<cache-lookup vary-by-developer="true \| false" vary-by-developer-groups="true \| false" caching-type="prefer-external \| external \| internal" downstream-caching-type="none \| private \| public" must-revalidate="true \| false" allow-private-response-caching="@(expression to evaluate)">`<br>&nbsp;&nbsp;`<vary-by-header>Accept</vary-by-header>`<br>&nbsp;&nbsp;`<vary-by-header>Accept-Charset</vary-by-header>`<br>&nbsp;&nbsp;`<vary-by-header>Authorization</vary-by-header>`<br>&nbsp;&nbsp;`<vary-by-header>header name</vary-by-header>`<br>&nbsp;&nbsp;`<vary-by-query-parameter>parameter name</vary-by-query-parameter>`<br>`</cache-lookup>`                                                                                                                                                                                                                                                                                                                                                                                                                                             | `vary-by-header` Add one or more of these elements to start caching responses per value of specified header, such as `Accept`, `Accept-Charset`, `Accept-Encoding`, `Accept-Language`, `Authorization`, `Expect`, `From`, `Host`, `If-Match`.<br>Similar behavior for `vary-by-...` attributes.                                                                                         | inbound                     |
-| [Get value from cache](https://learn.microsoft.com/en-us/azure/api-management/cache-lookup-value-policy)               | `<cache-lookup-value key="cache key value" default-value="value to use if cache lookup resulted in a miss" variable-name="name of a variable looked up value is assigned to" caching-type="prefer-external \| external \| internal" />`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `caching-type`: `internal` to use the built-in API Management cache, `external` to use Redis.                                                                                                                                                                                                                                         | Any                         |
-| [Store to cache](https://learn.microsoft.com/en-us/azure/api-management/cache-store-value-policy)                     | `<cache-store duration="seconds" cache-response="true \| false" />`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Use with `cache-lookup-value` in `inbound`                                                                                                                                                                                                                                                                                                  | Any                    |
-| Store value in cache               | `<cache-store-value key="cache key value" value="value to cache" duration="seconds" caching-type="prefer-external \| external \| internal" />`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | The operation is asynchronous. `caching-type`: `internal` to use the built-in API Management cache, `external` to use Redis.                                                                                                                                                                                                          | Any                         |
-| ---                                | ---                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | ---                                                                                                                                                                                                                                                                                                                                   | ---                         |
-| CORS | `<cors allow-credentials="false \| true" terminate-unmatched-request="true \| false">`<br>&nbsp;&nbsp;`<allowed-origins>`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<origin>origin uri</origin>`<br>&nbsp;&nbsp;`</allowed-origins>`<br>&nbsp;&nbsp;`<allowed-methods preflight-result-max-age="number of seconds">`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<method>HTTP verb</method>`<br>&nbsp;&nbsp;`</allowed-methods>`<br>&nbsp;&nbsp;`<allowed-headers>`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<header>header name</header>`<br>&nbsp;&nbsp;`</allowed-headers>`<br>&nbsp;&nbsp;`<expose-headers>`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<header>header name</header>`<br>&nbsp;&nbsp;`</expose-headers>`<br>`</cors>` | Can be configured at any scope. The policy from the most specific scope is always applied.<br><br><b>For OPTIONS Preflight Requests:</b> When APIM receives a preflight OPTIONS request, it only evaluates the `cors` policy. All other policies in the inbound section are skipped.<br><br><b>For Actual Requests (e.g., GET, POST):</b> For the subsequent "actual" request (which follows a successful preflight), APIM skips the `cors` policy and executes all other inbound policies as configured.<br><br>You can only include one `cors` element within a single policy scope. | inbound |
-| Find and replace string in body    | `<find-and-replace from="what to replace" to="replacement" />`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Policy expressions are allowed.                                                                                                                                                                                                                                                                                                       | Any                         |
-| Set backend service                | `<set-backend-service base-url="base URL of the backend service"  backend-id="name of the backend entity specifying base URL of the backend service" />`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Redirect an incoming request to a different backend than the one specified in the API settings for that operation.<br>`base-url` and `backend-id` are **mutual exclusive**.<br> Great for `choose`                                                                                                                                                                                                 | inbound, backend            |
-| [Set body](https://learn.microsoft.com/en-us/azure/api-management/set-body-policy)                           | `<set-body template="liquid" xsi-nil="blank \| null">new body value as text</set-body>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `preserveContent` not needed when providing new body.<br> Inbound pipeline: no response yet, so no `preserveContent`.<br> Outbound pipeline: request already sent, so no `preserveContent`. <br>Exception if used in inbound GET with no body.                                                                                                    | inbound, outbound, backend  |
-| Set header                         | `<set-header name="header name" exists-action="override \| skip \| append \| delete"><value>value</value></set-header>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | For multiple headers with the same name, add additional value elements.<br>The following headers can't be appended, overridden, or deleted: `Connection, Content-Length, Keep-Alive, Transfer-Encoding`                                                                                                                                                                                                                                                                 | Any                         |
-| Rewrite URL                        | `<rewrite-uri template="/v2/US/hardware/{storenumber}&{ordernumber}?City=city&State=state" />`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Transforms human/browser-friendly URL into the URL format expected by the web service.<br>You can only add query string parameters using the policy. You can't add extra template path parameters in the rewrite URL. | inbound                     |
-| [Fire and forget](https://learn.microsoft.com/en-us/azure/api-management/send-one-way-request-policy) | `<send-one-way-request mode="new \| copy" timeout="time in seconds">`<br>`<set-url>request URL</set-url>`<br>`<set-method>...</set-method>`<br>`<set-header>...</set-header>`<br>`<set-body>...</set-body>`<br>`<authentication-certificate thumbprint="thumbprint" />`<br>`</send-one-way-request>` | Sends an HTTP request but does not wait for a response, making it ideal for 'fire-and-forget' scenarios like logging without impacting client response time. | outbound |
+| Name                                                                                                                                | Example                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Sections                    |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| Check HTTP header                                                                                                                   | `<check-header name="header name" failed-check-httpcode="code" failed-check-error-message="message" ignore-case="true \| false">`<br>&nbsp;&nbsp;`<value>Value1</value>`<br>&nbsp;&nbsp;`<value>Value2</value>`<br>`</check-header>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | The check passes if the header's value matches any one of the values in the list. Otherwise, the policy immediately terminates the request and sends a response to the caller with provided `failed-check-...` details.                                                                                                                                                                                                                                                                                                                                                                | inbound                     |
+| Get authorization context                                                                                                           | `<get-authorization-context`<br>&nbsp;&nbsp;`provider-id="authorization provider id"`<br>&nbsp;&nbsp;`authorization-id="authorization id"`<br>&nbsp;&nbsp;`context-variable-name="variable name"`<br>&nbsp;&nbsp;`identity-type="managed \| jwt"`<br>&nbsp;&nbsp;`identity="JWT bearer token"`<br>&nbsp;&nbsp;`ignore-error="true \| false" />`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `context-variable-name` is the name of the context variable to receive the Authorization object (`{accessToken: string, claims: Record<string, object>}`). Configure `identity-type=jwt` when the access policy for the authorization is assigned to a service principal. Only `/.default` scope (`app-only` token) is supported for the JWT.                                                                                                                                                                                                                                          | inbound                     |
+| Restrict caller IPs                                                                                                                 | `<ip-filter action="allow \| forbid">`<br>&nbsp;&nbsp;`<address>address</address>`<br>&nbsp;&nbsp;`<address-range from="address" to="address" />`<br>`</ip-filter>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | At least one `address` or `address-range` element is required.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | inbound                     |
+| Validate Microsoft Entra ID token                                                                                                   | `Simple token validation: <validate-azure-ad-token tenant-id="{{aad-tenant-id}}">`<br>&nbsp;&nbsp;`<client-application-ids>`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<application-id>{{aad-client-application-id}}</application-id>`<br>&nbsp;&nbsp;`</client-application-ids>`<br>`</validate-azure-ad-token>`<br>`Validate that audience and claim are correct: <validate-azure-ad-token tenant-id="{{aad-tenant-id}}" output-token-variable-name="jwt">`<br>&nbsp;&nbsp;`<client-application-ids>`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<application-id>{{aad-client-application-id}}</application-id>`<br>&nbsp;&nbsp;`</client-application-ids>`<br>&nbsp;&nbsp;`<audiences>`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<audience>@(context.Request.OriginalUrl.Host)</audience>`<br>&nbsp;&nbsp;`</audiences>`<br>&nbsp;&nbsp;`<required-claims>`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<claim name="ctry" match="any">`<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`<value>US</value>`<br>&nbsp;&nbsp;&nbsp;&nbsp;`</claim>`<br>&nbsp;&nbsp;`</required-claims>`<br>`</validate-azure-ad-token>`                                                        | To validate a JWT that was provided by another identity provider, use the generic `validate-jwt`. You can secure the whole API with Entra ID authentication by applying the policy on the API level, or you can apply it on the API operation level and use claims for more granular control.                                                                                                                                                                                                                                                                                          | inbound                     |
+| Validate client certificate                                                                                                         | `<validate-client-certificate`<br>&nbsp;&nbsp;`validate-revocation="true \| false"`<br>&nbsp;&nbsp;`validate-trust="true \| false"`<br>&nbsp;&nbsp;`validate-not-before="true \| false"`<br>&nbsp;&nbsp;`validate-not-after="true \| false"`<br>&nbsp;&nbsp;`ignore-error="true \| false">`<br>&nbsp;&nbsp;`<identities>`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<identity `<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`thumbprint="certificate thumbprint"`<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`serial-number="certificate serial number"`<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`common-name="certificate common name"`<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`subject="certificate subject string"`<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`dns-name="certificate DNS name"`<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`issuer-subject="certificate issuer"`<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`issuer-thumbprint="certificate issuer thumbprint"`<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;`issuer-certificate-id="certificate identifier" />`<br>&nbsp;&nbsp;`</identities>`<br>`</validate-client-certificate>` | All attributes are Optional (each has defaults), `identities` too                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | inbound                     |
+| Control flow                                                                                                                        | `<choose>`<br>&nbsp;&nbsp;`<when condition="Boolean expression \| Boolean constant">`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<!— one or more policy statements to be applied if the above condition is true  -->`<br>&nbsp;&nbsp;`</when>`<br>&nbsp;&nbsp;`<when condition="Boolean expression \| Boolean constant">`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<!— one or more policy statements to be applied if the above condition is true  -->`<br>&nbsp;&nbsp;`</when>`<br>&nbsp;&nbsp;`<otherwise>`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<!— one or more policy statements to be applied if none of the above conditions are true  -->`<br>&nbsp;&nbsp;`</otherwise>`<br>`</choose>`                                                                                                                                                                                                                                                                                                                                                                                                                                                     | The choose policy must contain at least one `<when/>` element. The `<otherwise/>` element is optional.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Any                         |
+| Limit concurrency                                                                                                                   | `<limit-concurrency key="expression" max-count="number">`<br>&nbsp;&nbsp;`<!— nested policy statements -->`<br>`</limit-concurrency>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Prevents enclosed policies from executing by more than the specified number of requests at any time. When that number is exceeded, new requests will fail immediately with `429 Too Many Requests`.<br>E.g. for given: `<limit-concurrency key="@((string)context.Variables["connectionId"])" max-count="10">`, requests with _connectionId="A"_ and _connectionId="B"_ => Total number of requests are allowed to be >=**20** at a certain point in time.                                                                                                                             | Any                         |
+| Rate limit                                                                                                                          | `<rate-limit-by-key calls="number"`<br>&nbsp;&nbsp;`counter-key="key value" `<br>&nbsp;&nbsp;`renewal-period="seconds"`<br>`/>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Renewal period is in seconds. Raises `429 Too Many Requests`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | inbound                     |
+| Quota                                                                                                                               | `<quota-by-key counter-key="key value" bandwidth="kilobytes" renewal-period="seconds" />`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Bandwidth is in KB, renewal period is in seconds                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | inbound                     |
+| Emit custom metrics                                                                                                                 | `<emit-metric name="name of custom metric" value="value of custom metric" namespace="metric namespace">`<br>&nbsp;&nbsp;`<dimension name="dimension name" value="dimension value" />`<br>`</emit-metric>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Sends custom metrics in the specified format to Application Insights. You can configure at most 10 custom dimensions for this policy. Counts toward the usage limits for custom metrics per region in a subscription.                                                                                                                                                                                                                                                                                                                                                                  | Any                         |
+| Forward request                                                                                                                     | `<forward-request http-version="1 \| 2or1 \| 2" timeout="time in seconds" continue-timeout="time in seconds" follow-redirects="false \| true" buffer-request-body="false \| true" buffer-response="true \| false" fail-on-error-status-code="false \| true"/>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | By default, this policy is set at the global scope.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | backend                     |
+| Log to event hub                                                                                                                    | `<log-to-eventhub logger-id="id of the logger entity" partition-id="index of the partition where messages are sent" partition-key="value used for partition assignment">`<br>`Expression returning a string to be logged`<br>`</log-to-eventhub>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | The policy is not affected by Application Insights sampling. All invocations of the policy will be logged. Max message size: 200 KB (otherwise truncated).                                                                                                                                                                                                                                                                                                                                                                                                                             | Any                         |
+| Mock response                                                                                                                       | `<mock-response status-code="code" content-type="media type"/>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Cancels normal pipeline execution. It prioritizes response content examples, using schemas when available and generating sample responses (or no content is returned). Policy expressions can't be used in attribute values for this policy.                                                                                                                                                                                                                                                                                                                                           | inbound, outbound, on-error |
+| Retry                                                                                                                               | `<retry`<br>&nbsp;&nbsp;`condition="Boolean expression or literal"`<br>&nbsp;&nbsp;`count="number of retry attempts"`<br>&nbsp;&nbsp;`interval="retry interval in seconds"`<br>&nbsp;&nbsp;`max-interval="maximum retry interval in seconds"`<br>&nbsp;&nbsp;`delta="retry interval delta in seconds"`<br>&nbsp;&nbsp;`first-fast-retry="boolean expression or literal">`<br>&nbsp;&nbsp;`<!-- One or more child policies. No restrictions. -->`<br>`</retry>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Executes its child policies once and then retries their execution until the `retry` condition becomes `false` or retry `count` is exhausted. When only the `interval` and `delta` are specified, the wait time between retries increases: `interval + (count - 1)*delta`.                                                                                                                                                                                                                                                                                                              | Any                         |
+| Return response                                                                                                                     | `<return-response response-variable-name="existing context variable">`<br>&nbsp;&nbsp;`<set-status>...</set-status>`<br>&nbsp;&nbsp;`<set-header>...</set-header>`<br>&nbsp;&nbsp;`<set-body>...</set-body>`<br>`</return-response>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Pipeline cancelation, body removal, custom or default response return to caller. Context variable and policy statements modify response if both provided.                                                                                                                                                                                                                                                                                                                                                                                                                              | Any                         |
+| [Send request](https://learn.microsoft.com/en-us/azure/api-management/send-request-policy)                                          | `<send-request mode="new \| copy" response-variable-name="" timeout="seconds" ignore-error="false \| true">`<br>&nbsp;&nbsp;`<set-url>request URL</set-url>`<br>&nbsp;&nbsp;`<set-method>...</set-method>`<br>&nbsp;&nbsp;`<set-header>...</set-header>`<br>&nbsp;&nbsp;`<set-body>...</set-body>`<br>&nbsp;&nbsp;`<authentication-certificate thumbprint="thumbprint" />`<br>&nbsp;&nbsp;`<proxy>...</proxy>`<br>`</send-request>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Default timeout: 60sec<br>In `set-method`, policy expressions aren't allowed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Inbound                     |
+| Set HTTP proxy                                                                                                                      | `<proxy url="http://hostname-or-ip:port" username="username" password="password" />`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Only HTTP is supported between the gateway and the proxy. Basic and NTLM authentication only. `username` and `password` are not required.                                                                                                                                                                                                                                                                                                                                                                                                                                              | inbound                     |
+| Set request method                                                                                                                  | `<set-method>HTTP method</set-method>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Policy expressions are allowed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | inbound, on-error           |
+| Set Status Code                                                                                                                     | `<set-status code="HTTP status code" reason="description"/>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | -                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Any                         |
+| Set Variable                                                                                                                        | `<set-variable name="variable name" value="Expression \| String literal" />`<br>`<set-variable name="IsMobile" value="@(context.Request.Headers.GetValueOrDefault("User-Agent","").Contains("iPad") \|\| context.Request.Headers.GetValueOrDefault("User-Agent","").Contains("iPhone"))" />`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | If the expression contains a literal it will be converted to a string.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Any                         |
+| Authenticate with Basic                                                                                                             | `<authentication-basic username="username" password="password" />`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Sets the HTTP Authorization header. Recommended using named values to provide credentials, with secrets protected in a key vault.                                                                                                                                                                                                                                                                                                                                                                                                                                                      | inbound                     |
+| [Authenticate with managed identity](https://learn.microsoft.com/en-us/azure/api-management/authentication-managed-identity-policy) | `<authentication-managed-identity resource="resource" client-id="clientid of user-assigned identity" output-token-variable-name="token-variable" ignore-error="true\|false"/>`<br>`<authentication-managed-identity resource="AD_application_id" output-token-variable-name="msi-access-token" ignore-error="false" />`<br>`<!--Application (client) ID of your own Entra ID Application-->`<br>`<set-header name="Authorization" exists-action="override">`<br>&nbsp;&nbsp;`<value>@("Bearer " + (string)context.Variables["msi-access-token"])</value>`<br>`</set-header>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | After successfully obtaining the token, the policy will set the value of the token in the Authorization header using the Bearer scheme. Both system-assigned identity and any of the multiple user-assigned identities can be used to request a token.                                                                                                                                                                                                                                                                                                                                 | inbound                     |
+| Get from cache                                                                                                                      | `<cache-lookup vary-by-developer="true \| false" vary-by-developer-groups="true \| false" caching-type="prefer-external \| external \| internal" downstream-caching-type="none \| private \| public" must-revalidate="true \| false" allow-private-response-caching="@(expression to evaluate)">`<br>&nbsp;&nbsp;`<vary-by-header>Accept</vary-by-header>`<br>&nbsp;&nbsp;`<vary-by-header>Accept-Charset</vary-by-header>`<br>&nbsp;&nbsp;`<vary-by-header>Authorization</vary-by-header>`<br>&nbsp;&nbsp;`<vary-by-header>header name</vary-by-header>`<br>&nbsp;&nbsp;`<vary-by-query-parameter>parameter name</vary-by-query-parameter>`<br>`</cache-lookup>`                                                                                                                                                                                                                                                                                                                                                                                                                                             | `vary-by-header` Add one or more of these elements to start caching responses per value of specified header, such as `Accept`, `Accept-Charset`, `Accept-Encoding`, `Accept-Language`, `Authorization`, `Expect`, `From`, `Host`, `If-Match`.<br>Similar behavior for `vary-by-...` attributes.                                                                                                                                                                                                                                                                                        | inbound                     |
+| [Get value from cache](https://learn.microsoft.com/en-us/azure/api-management/cache-lookup-value-policy)                            | `<cache-lookup-value key="cache key value" default-value="value to use if cache lookup resulted in a miss" variable-name="name of a variable looked up value is assigned to" caching-type="prefer-external \| external \| internal" />`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `caching-type`: `internal` to use the built-in API Management cache, `external` to use Redis.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Any                         |
+| [Store to cache](https://learn.microsoft.com/en-us/azure/api-management/cache-store-value-policy)                                   | `<cache-store duration="seconds" cache-response="true \| false" />`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Use with `cache-lookup-value` in `inbound`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Any                         |
+| Store value in cache                                                                                                                | `<cache-store-value key="cache key value" value="value to cache" duration="seconds" caching-type="prefer-external \| external \| internal" />`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | The operation is asynchronous. `caching-type`: `internal` to use the built-in API Management cache, `external` to use Redis.                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Any                         |
+| ---                                                                                                                                 | ---                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | ---                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | ---                         |
+| CORS                                                                                                                                | `<cors allow-credentials="false \| true" terminate-unmatched-request="true \| false">`<br>&nbsp;&nbsp;`<allowed-origins>`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<origin>origin uri</origin>`<br>&nbsp;&nbsp;`</allowed-origins>`<br>&nbsp;&nbsp;`<allowed-methods preflight-result-max-age="number of seconds">`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<method>HTTP verb</method>`<br>&nbsp;&nbsp;`</allowed-methods>`<br>&nbsp;&nbsp;`<allowed-headers>`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<header>header name</header>`<br>&nbsp;&nbsp;`</allowed-headers>`<br>&nbsp;&nbsp;`<expose-headers>`<br>&nbsp;&nbsp;&nbsp;&nbsp;`<header>header name</header>`<br>&nbsp;&nbsp;`</expose-headers>`<br>`</cors>`                                                                                                                                                                                                                                                                                                                                                                                                                               | Can be configured at any scope. The policy from the most specific scope is always applied.<br><br><b>For OPTIONS Preflight Requests:</b> When APIM receives a preflight OPTIONS request, it only evaluates the `cors` policy. All other policies in the inbound section are skipped.<br><br><b>For Actual Requests (e.g., GET, POST):</b> For the subsequent "actual" request (which follows a successful preflight), APIM skips the `cors` policy and executes all other inbound policies as configured.<br><br>You can only include one `cors` element within a single policy scope. | inbound                     |
+| Find and replace string in body                                                                                                     | `<find-and-replace from="what to replace" to="replacement" />`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Policy expressions are allowed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Any                         |
+| Set backend service                                                                                                                 | `<set-backend-service base-url="base URL of the backend service"  backend-id="name of the backend entity specifying base URL of the backend service" />`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Redirect an incoming request to a different backend than the one specified in the API settings for that operation.<br>`base-url` and `backend-id` are **mutual exclusive**.<br> Great for `choose`                                                                                                                                                                                                                                                                                                                                                                                     | inbound, backend            |
+| [Set body](https://learn.microsoft.com/en-us/azure/api-management/set-body-policy)                                                  | `<set-body template="liquid" xsi-nil="blank \| null">new body value as text</set-body>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `preserveContent` not needed when providing new body.<br> Inbound pipeline: no response yet, so no `preserveContent`.<br> Outbound pipeline: request already sent, so no `preserveContent`. <br>Exception if used in inbound GET with no body.                                                                                                                                                                                                                                                                                                                                         | inbound, outbound, backend  |
+| Set header                                                                                                                          | `<set-header name="header name" exists-action="override \| skip \| append \| delete"><value>value</value></set-header>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | For multiple headers with the same name, add additional value elements.<br>The following headers can't be appended, overridden, or deleted: `Connection, Content-Length, Keep-Alive, Transfer-Encoding`                                                                                                                                                                                                                                                                                                                                                                                | Any                         |
+| Rewrite URL                                                                                                                         | `<rewrite-uri template="/v2/US/hardware/{storenumber}&{ordernumber}?City=city&State=state" />`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Transforms human/browser-friendly URL into the URL format expected by the web service.<br>You can only add query string parameters using the policy. You can't add extra template path parameters in the rewrite URL.                                                                                                                                                                                                                                                                                                                                                                  | inbound                     |
+| [Fire and forget](https://learn.microsoft.com/en-us/azure/api-management/send-one-way-request-policy)                               | `<send-one-way-request mode="new \| copy" timeout="time in seconds">`<br>`<set-url>request URL</set-url>`<br>`<set-method>...</set-method>`<br>`<set-header>...</set-header>`<br>`<set-body>...</set-body>`<br>`<authentication-certificate thumbprint="thumbprint" />`<br>`</send-one-way-request>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Sends an HTTP request but does not wait for a response, making it ideal for 'fire-and-forget' scenarios like logging without impacting client response time.                                                                                                                                                                                                                                                                                                                                                                                                                           | outbound                    |
 
 **📝 NOTE:** As a best practice, include a base element at the beginning of each policy section to inherit policies from the parent scope. This ensures that any policies defined at a higher level are not inadvertently overridden or ignored.
 
@@ -518,11 +519,11 @@ Azure App Configuration manages configuration data using key-value pairs.
 
 ### Azure App Configuration Reserved Characters
 
-| Reserved Characters in Key Names | Reserved Characters in Queries (Filters) | Examples of Queries|
-|-----------------------------------|-------------------------------------------|----------|
-| `%` - Cannot use the percent sign | `*` (Asterisk) - Wildcard to match one or more characters | `App:Settings:*` matches all keys starting with `App:Settings:` |
-| `.` or `..` - Key names cannot be a single dot or double dot | `,` (Comma) - Separator to query for multiple keys or labels at once | `Key1,Key2` retrieves both `Key1` and `Key2` |
-| | `\` (Backslash) - Escape character to search for keys that literally contain special characters | To find `MyKey,Special` use filter `MyKey\,Special`<br>To find `MyKey*Special` use filter `MyKey\*Special` |
+| Reserved Characters in Key Names                             | Reserved Characters in Queries (Filters)                                                        | Examples of Queries                                                                                        |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `%` - Cannot use the percent sign                            | `*` (Asterisk) - Wildcard to match one or more characters                                       | `App:Settings:*` matches all keys starting with `App:Settings:`                                            |
+| `.` or `..` - Key names cannot be a single dot or double dot | `,` (Comma) - Separator to query for multiple keys or labels at once                            | `Key1,Key2` retrieves both `Key1` and `Key2`                                                               |
+|                                                              | `\` (Backslash) - Escape character to search for keys that literally contain special characters | To find `MyKey,Special` use filter `MyKey\,Special`<br>To find `MyKey*Special` use filter `MyKey\*Special` |
 
 #### **Keys**
 
@@ -536,14 +537,14 @@ Azure App Configuration manages configuration data using key-value pairs.
 
 - A key's name _plus_ its label makes it unique. This lets you store different values for the same key.
 
-| Key | Label | Value |
-|-----|-------|-------|
-| Api:DatabaseConnection | Test | test-server-connection-string |
-| Api:DatabaseConnection | Prod | prod-server-connection-string |
+| Key                    | Label | Value                         |
+| ---------------------- | ----- | ----------------------------- |
+| Api:DatabaseConnection | Test  | test-server-connection-string |
+| Api:DatabaseConnection | Prod  | prod-server-connection-string |
 
 These are treated as two completely separate settings.
 
-- A setting with no label is called the **"null" label**. This is perfect for default values that all environments share. In a query, null labels can be found by searching for `\0`. 
+- A setting with no label is called the **"null" label**. This is perfect for default values that all environments share. In a query, null labels can be found by searching for `\0`.
 - Labels are hierachical logical-wise only, same approach as keys.
 
 #### **Values**
@@ -599,7 +600,7 @@ A successful feature management system requires:
 
 Feature flags are used as Boolean state variables in conditional statements:
 
-```csharp
+```cs
 bool featureFlag = true; // static value
 bool featureFlag = isBetaUser(); // evaluated value
 
@@ -627,7 +628,7 @@ builder.Configuration.AddAzureAppConfiguration(options =>
 // Add feature management to the container of services.
 builder.Services.AddFeatureManagement();
 // below is explained later
-builder.Services.AddFeatureFilter<TargetingFilter>(); 
+builder.Services.AddFeatureFilter<TargetingFilter>();
 ```
 
 ### [Conditional feature flags](https://learn.microsoft.com/en-us/azure/azure-app-configuration/howto-feature-filters-aspnet-core)
@@ -651,37 +652,37 @@ Allows the feature flag to be enabled or disabled dynamically.
 
 1. Implement `ITargetingContextAccessor`
 
-  ```cs
-  public class HttpContextTargetingContextAccessor : ITargetingContextAccessor
-  {
-      private const string TargetingContextLookup = "TestTargetingContextAccessor.TargetingContext";
-      private readonly IHttpContextAccessor _httpContextAccessor;
+```cs
+public class HttpContextTargetingContextAccessor : ITargetingContextAccessor
+{
+    private const string TargetingContextLookup = "TestTargetingContextAccessor.TargetingContext";
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-      public HttpContextTargetingContextAccessor(IHttpContextAccessor httpContextAccessor)
-      {
-          _httpContextAccessor = httpContextAccessor;
-      }
+    public HttpContextTargetingContextAccessor(IHttpContextAccessor httpContextAccessor)
+    {
+        _httpContextAccessor = httpContextAccessor;
+    }
 
-      public ValueTask<TargetingContext> GetContextAsync()
-      {
-          if (httpContext.Items.TryGetValue(TargetingContextLookup, out object value))
-              return new ValueTask<TargetingContext>((TargetingContext)value);
+    public ValueTask<TargetingContext> GetContextAsync()
+    {
+        if (httpContext.Items.TryGetValue(TargetingContextLookup, out object value))
+            return new ValueTask<TargetingContext>((TargetingContext)value);
 
-          // Example: `test@contoso.com` - User: `test`, Group(s): `contoso.com`
-          List<string> groups = new List<string>();
-          if (httpContext.User.Identity.Name != null)
-              groups.Add(httpContext.User.Identity.Name.Split("@", StringSplitOptions.None)[1]);
+        // Example: `test@contoso.com` - User: `test`, Group(s): `contoso.com`
+        List<string> groups = new List<string>();
+        if (httpContext.User.Identity.Name != null)
+            groups.Add(httpContext.User.Identity.Name.Split("@", StringSplitOptions.None)[1]);
 
-          var targetingContext = new TargetingContext
-          {
-              UserId = httpContext.User.Identity.Name,
-              Groups = groups
-          };
-          httpContext.Items[TargetingContextLookup] = targetingContext;
-          return new ValueTask<TargetingContext>(targetingContext);
-      }
-  }
-  ```
+        var targetingContext = new TargetingContext
+        {
+            UserId = httpContext.User.Identity.Name,
+            Groups = groups
+        };
+        httpContext.Items[TargetingContextLookup] = targetingContext;
+        return new ValueTask<TargetingContext>(targetingContext);
+    }
+}
+```
 
 1. Add `TargetingFilter`: `services.AddFeatureManagement().AddFeatureFilter<TargetingFilter>();`
 
@@ -700,7 +701,8 @@ The feature manager supports _appsettings.json_ as a configuration source for fe
   "FeatureManagement": {
     "FeatureA": true, // Feature on
     "FeatureB": false, // Feature off
-    "FeatureC": {     // Conditional feature flag. It uses a feature filter called Percentage to enable the feature for a random 50% of users.
+    "FeatureC": {
+      // Conditional feature flag. It uses a feature filter called Percentage to enable the feature for a random 50% of users.
       "EnabledFor": [
         {
           "Name": "Percentage",
@@ -710,7 +712,7 @@ The feature manager supports _appsettings.json_ as a configuration source for fe
     }
   }
 }
-```  
+```
 
 ### Feature Flag Repository
 
@@ -720,81 +722,83 @@ Azure App Configuration serves as a centralized repository for feature flags, en
 
 #### **Built-in Feature Filters**
 
-| Filter | Purpose | Auto-Added | Key Properties |
-|--------|---------|------------|----------------|
-| `Microsoft.Percentage` | Enable feature for % of users | Yes | `Value` (0-100) |
-| `Microsoft.TimeWindow` | Enable during time window | Yes | `Start`, `End`, `Recurrence` (optional) |
-| `Microsoft.Targeting` | Enable for specific users/groups (in web apps) | No (use `AddTargetingFilter()`) | `Audience` (Users, Groups, DefaultRolloutPercentage, Exclusion) |
-| `ContextualTargetingFilter` | Targeting for console apps / non-web scenarios | Yes | Same as Targeting, but you must pass the `TargetingContext` manually in your code. |
+| Filter                      | Purpose                                        | Auto-Added                      | Key Properties                                                                     |
+| --------------------------- | ---------------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------- |
+| `Microsoft.Percentage`      | Enable feature for % of users                  | Yes                             | `Value` (0-100)                                                                    |
+| `Microsoft.TimeWindow`      | Enable during time window                      | Yes                             | `Start`, `End`, `Recurrence` (optional)                                            |
+| `Microsoft.Targeting`       | Enable for specific users/groups (in web apps) | No (use `AddTargetingFilter()`) | `Audience` (Users, Groups, DefaultRolloutPercentage, Exclusion)                    |
+| `ContextualTargetingFilter` | Targeting for console apps / non-web scenarios | Yes                             | Same as Targeting, but you must pass the `TargetingContext` manually in your code. |
 
 #### **Recurrence Pattern Types**
 
-| Pattern | Key Properties |
-|---------|---------------|
-| Daily | `Type: "Daily"`, `Interval` (optional, days between occurrences) |
-| Weekly | `Type: "Weekly"`, `DaysOfWeek` (array), `Interval` (optional, weeks between), `FirstDayOfWeek` (optional) |
+| Pattern | Key Properties                                                                                            |
+| ------- | --------------------------------------------------------------------------------------------------------- |
+| Daily   | `Type: "Daily"`, `Interval` (optional, days between occurrences)                                          |
+| Weekly  | `Type: "Weekly"`, `DaysOfWeek` (array), `Interval` (optional, weeks between), `FirstDayOfWeek` (optional) |
 
 #### **Recurrence Range Types**
 
-| Range | Description | Key Properties |
-|-------|-------------|----------------|
-| NoEnd | Repeat indefinitely | `Type: "NoEnd"` |
-| EndDate | Repeat until date | `Type: "EndDate"`, `EndDate` |
-| Numbered | Repeat N times | `Type: "Numbered"`, `NumberOfOccurrences` |
+| Range    | Description         | Key Properties                            |
+| -------- | ------------------- | ----------------------------------------- |
+| NoEnd    | Repeat indefinitely | `Type: "NoEnd"`                           |
+| EndDate  | Repeat until date   | `Type: "EndDate"`, `EndDate`              |
+| Numbered | Repeat N times      | `Type: "Numbered"`, `NumberOfOccurrences` |
 
 #### **Targeting Setup**
 
-| Application Type | Implementation | Registration |
-|-----------------|----------------|--------------|
-| Web App | Use `ITargetingContextAccessor` | `.WithTargeting()` or `.WithTargeting<T>()` |
-| Console App | Use `ContextualTargetingFilter` + pass `TargetingContext` manually | Standard feature management setup |
+| Application Type | Implementation                                                     | Registration                                |
+| ---------------- | ------------------------------------------------------------------ | ------------------------------------------- |
+| Web App          | Use `ITargetingContextAccessor`                                    | `.WithTargeting()` or `.WithTargeting<T>()` |
+| Console App      | Use `ContextualTargetingFilter` + pass `TargetingContext` manually | Standard feature management setup           |
 
-#### **Targeting Evaluation Order**  
+#### **Targeting Evaluation Order**
+
 Evaluation stops as soon as the first matching rule is found.
 
-| Priority | Rule | Condition | Result | Notes |
-|----------|------|-----------|--------|-------|
-| 1 | **Exclusion** | User or any of his group is in `Exclusion` list | **Disabled** | Always checked first. Immediately disables the feature regardless of other rules.  |
-| 2 | **Users** | User is in `Users` list | **Enabled** | Direct user targeting.|
-| 3 | **Groups** | User is in any defined `Group` | **Enabled/Disabled** (based on group's rollout %) | Uses percentage-based rollout per group. User may or may not be `Enabled` based on the percentage.  |
-| 4 | **Default Rollout** | User not in `Exclusion`, `Users`, or `Groups` | **Enabled/Disabled** (based on `DefaultRolloutPercentage`) | Uses percentage-based enablement.  |
-| 5 | **None Match** | DefaultRolloutPercentage = 0% OR user falls outside rollout | **Disabled** | Final fallback |
+| Priority | Rule                | Condition                                                   | Result                                                     | Notes                                                                                              |
+| -------- | ------------------- | ----------------------------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| 1        | **Exclusion**       | User or any of his group is in `Exclusion` list             | **Disabled**                                               | Always checked first. Immediately disables the feature regardless of other rules.                  |
+| 2        | **Users**           | User is in `Users` list                                     | **Enabled**                                                | Direct user targeting.                                                                             |
+| 3        | **Groups**          | User is in any defined `Group`                              | **Enabled/Disabled** (based on group's rollout %)          | Uses percentage-based rollout per group. User may or may not be `Enabled` based on the percentage. |
+| 4        | **Default Rollout** | User not in `Exclusion`, `Users`, or `Groups`               | **Enabled/Disabled** (based on `DefaultRolloutPercentage`) | Uses percentage-based enablement.                                                                  |
+| 5        | **None Match**      | DefaultRolloutPercentage = 0% OR user falls outside rollout | **Disabled**                                               | Final fallback                                                                                     |
 
 #### **[Variants Overview](https://learn.microsoft.com/en-us/azure/azure-app-configuration/feature-management-dotnet-reference#variants)**
 
-| Concept | Description |
-|---------|-------------|
-| Purpose | A/B testing - multiple feature configurations |
+| Concept            | Description                                                     |
+| ------------------ | --------------------------------------------------------------- |
+| Purpose            | A/B testing - multiple feature configurations                   |
 | Variant Properties | `configuration_value` (string, number, bool, or object), `name` |
-| Retrieve | `await featureManager.GetVariantAsync("FeatureName")` |
+| Retrieve           | `await featureManager.GetVariantAsync("FeatureName")`           |
 
 #### **[Variant Allocation Properties](https://learn.microsoft.com/en-us/azure/azure-app-configuration/feature-management-dotnet-reference#allocate-variants)**
 
-| Property | Description |
-|----------|-------------|
-| `default_when_disabled` | Takes effect if the flag is disabled, done by setting the `Enabled` field to false, also known as "kill switch". |
-| `default_when_enabled` | Takes effect if the flag is enabled but the allocation doesn't assign all percentiles. Any user placed in an unassigned percentile receives the `DefaultWhenEnabled` variant. |
-| `user` | Assign variant to specific users |
-| `group` | Assign variant if user in group(s) |
-| `percentile` | Assign variant if user in % range (e.g., 0-10) |
-| `seed` | Without a seed, a user might see VariantA today and VariantB tomorrow. The seed makes the random assignment predictable.<br>Its value is trivial, better to give a self-descriptive value. |
+| Property                | Description                                                                                                                                                                                |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `default_when_disabled` | Takes effect if the flag is disabled, done by setting the `Enabled` field to false, also known as "kill switch".                                                                           |
+| `default_when_enabled`  | Takes effect if the flag is enabled but the allocation doesn't assign all percentiles. Any user placed in an unassigned percentile receives the `DefaultWhenEnabled` variant.              |
+| `user`                  | Assign variant to specific users                                                                                                                                                           |
+| `group`                 | Assign variant if user in group(s)                                                                                                                                                         |
+| `percentile`            | Assign variant if user in % range (e.g., 0-10)                                                                                                                                             |
+| `seed`                  | Without a seed, a user might see VariantA today and VariantB tomorrow. The seed makes the random assignment predictable.<br>Its value is trivial, better to give a self-descriptive value. |
 
 #### **[Status Override (Variants)](https://learn.microsoft.com/en-us/azure/azure-app-configuration/feature-management-dotnet-reference#override-enabled-state-by-using-a-variant)**
+
 During the call to IsEnabledAsync on a flag with variants, the feature manager checks whether the variant assigned to the user is configured to override the result.
 
-| Value | Effect |
-|-------|--------|
-| `None` | No override (default) |
-| `Enabled` | Evaluate feature as `enabled` when variant chosen |
+| Value      | Effect                                             |
+| ---------- | -------------------------------------------------- |
+| `None`     | No override (default)                              |
+| `Enabled`  | Evaluate feature as `enabled` when variant chosen  |
 | `Disabled` | Evaluate feature as `disabled` when variant chosen |
 
 #### **[Variant Service Provider](https://learn.microsoft.com/en-us/azure/azure-app-configuration/feature-management-dotnet-reference#variant-service-alias-attribute)**
 
-| Component | Purpose |
-|-----------|---------|
-| `IVariantServiceProvider<T>` | Get different service implementations per user based on variant |
-| Setup | `.WithVariantService<T>("FeatureName")` |
-| Attribute | `[VariantServiceAlias("Name")]` - map implementation to variant name |
+| Component                    | Purpose                                                              |
+| ---------------------------- | -------------------------------------------------------------------- |
+| `IVariantServiceProvider<T>` | Get different service implementations per user based on variant      |
+| Setup                        | `.WithVariantService<T>("FeatureName")`                              |
+| Attribute                    | `[VariantServiceAlias("Name")]` - map implementation to variant name |
 
 ## Security
 
@@ -815,8 +819,10 @@ az keyvault set-policy --name <YourKeyVaultName> \
                        --object-id <ManagedIdentityObjectID> \
                        --key-permissions get wrapKey unwrapKey
 ```
-**📝 NOTE:** To mitigate the possibility of the underlying managed key expiring, do both:  
-- Omit the key version when setting up encryption  
+
+**📝 NOTE:** To mitigate the possibility of the underlying managed key expiring, do both:
+
+- Omit the key version when setting up encryption
 - Enable _auto key rotation_ in Key Vault.
 
 **📝 NOTE:** Sensitive information can't be decrypted if any of the following occurs:
@@ -838,6 +844,7 @@ az keyvault set-policy --name <YourKeyVaultName> \
     --name <App-Configuration-store-name> \
     --enable-public-network true
 ```
+
 - Uses same connection strings/auth; no app changes needed.
 
 ## Configure Key Vault
@@ -1845,7 +1852,7 @@ Histogram - closest to `GetMetric()` from classic SDK
 
 #### Examples
 
-```csharp
+```cs
 var meter = new Meter("MyApp.Metrics");
 
 var histogram = meter.CreateHistogram<long>("response_time_ms");
@@ -1884,7 +1891,7 @@ Practical Examples:
 - Drop sensitive data (PII, credentials)
 - Improve performance by excluding low-value traces
 
-```csharp
+```cs
 // Via Instrumentation
 builder.Services.AddOpenTelemetry().UseAzureMonitor().WithTracing(builder => builder.AddSqlClientInstrumentation(options => {
   options.SetDbStatementForStoredProcedure = false;
@@ -2319,7 +2326,7 @@ If two or more metadata headers with the same name are submitted for a resource,
 
 Example:
 
-```csharp
+```cs
 // Fetch some container properties and write out their values.
 var properties = await container.GetPropertiesAsync();
 Console.WriteLine($"Properties for container {container.Uri}");
@@ -3703,46 +3710,56 @@ Regular automatic secure (🔑) backups without affecting performance. Restores 
 - Diagnostic Logs: Offers operation traces, which can be analyzed further in various Azure services.
 - Query Stats: Provides execution metrics to help optimize and troubleshoot queries.
 
-# [Microsoft Entra ID](https://learn.microsoft.com/en-us/entra/identity/)
+# [Microsoft Entra ID](https://learn.microsoft.com/en-us/entra/fundamentals/what-is-entra#microsoft-entra-id)
 
 Implements [OAuth 2.0](https://learn.microsoft.com/en-us/entra/identity-platform/v2-protocols) authorization protocol, allowing third-party apps to access web-hosted resources on behalf of users. These resources have a unique _application ID URI_.
+
+High-level view of relation between how the [`Azure roles`](https://learn.microsoft.com/en-us/azure/role-based-access-control/rbac-and-directory-admin-roles#azure-roles), [`Microsoft Entra roles`](https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/permissions-reference), and `classic subscription administrator roles`.<br>
+<img src="https://learn.microsoft.com/en-us/azure/role-based-access-control/media/rbac-and-directory-admin-roles/rbac-admin-roles.png" width="600">
 
 ## Microsoft Entra ID vs Role-Based Access Control (RBAC)
 
 | Feature        | Entra ID                                                            | Azure RBAC                                                                                   |
 | -------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| **Purpose**    | Authentication. Identity & Access Management                        | Authorization                                                                                |
-| **Focus**      | Entra ID Resources                                                  | Azure Resources                                                                              |
+| **Purpose**    | Authentication + Authorization(identity-related resources only)                        | Authorization                                                                                |
+| **Focus**      | Manages identities (users, groups, devices, applications) and authenticates access to Microsoft 365, Azure services, and any application that supports modern identity protocols (SAML, OAuth, OpenID Connect)                                                 | Manages permissions for Azure resources                                                                              |
 | **Scope**      | Tenant                                                              | Management Group, Subscription, Resource Group, Resource                                     |
 | **Roles**      | Global, User, Billing Admins; Custom roles; Multiple roles per user | Owner, Contributor, Reader, User Access Admin; Custom roles (P1/P2); Multiple roles per user |
-| **Access Via** | Azure Portal, MS 365 Admin, Graph, PowerShell                       | Azure Portal, CLI, PowerShell, ARM templates, REST API                                       |
+| **Access Via** | Azure Portal, MS 365 Admin, MS Graph, PowerShell                       | Azure Portal, CLI, PowerShell, ARM templates, REST API                                       |
 | **Pricing**    | Free, P1, P2 (Monthly charged)                                      | Free (With Azure subscription)                                                               |
+
+## Key Terms
+
+### Application Object and Service Principal
+
+- **[Application Object](https://learn.microsoft.com/en-us/entra/identity-platform/app-objects-and-service-principals?tabs=browser#application-object)**: The global template/representation of your application, residing in the Entra ID tenant where the app is registered. It has a 1:1 relationship with the software application and a 1:N relationship with service principal objects across different tenants.
+
+- **[Service Principal (or Service Principal Object)](https://learn.microsoft.com/en-us/entra/identity-platform/app-objects-and-service-principals?tabs=browser#service-principal-object)**: The local instance (identity) created in each tenant that consumes your app. These are local representations within each tenant, derived from the application object. Managed via the **Enterprise applications** page in the Azure portal.
+
+### Service Principal Types
+
+| Type | Description | Key Characteristics |
+|------|-------------|---------------------|
+| Application | Local representation of a global application object in a specific tenant, created from the application object. | A service principal is created in each tenant where the app is used and defines what the app can do, who can access it, and what resources it can access. Created automatically upon app registration or when the app receives consent to access tenant resources. References the globally unique app object. |
+| Managed Identity | Represents a managed identity that eliminates the need for developers to manage secrets/certificates. | Provides an identity for applications connecting to resources that support Entra authentication (primarily designed for Azure-to-Azure authentication). The service principal is created automatically when a managed identity is enabled. Can be granted access and permissions, but cannot be updated or modified directly and has no associated app object, unlike `Application` type. |
+| Legacy | Represents apps created before app registrations were introduced or through legacy experiences. | Can have credentials, service principal names, reply URLs, and other editable properties, but has no associated app registration. Can only be used in the tenant where it was created. |
 
 ## Use case: App Service web app accessing Microsoft Graph API (or other service)
 
-- For multi-tenant applications, an _application service principal_ is utilized to grant permissions. This enables the app to access Microsoft Graph API resources across multiple tenants without relying on a specific user identity.
+- For multi-tenant applications, a service principal (type: Application) is created in each tenant to grant the app access to that tenant's Microsoft Graph API resources without requiring a user to sign in.
 - For single-tenant scenarios where the app only needs to access resources within a specific tenant, a _Managed Identity_ could be more appropriate.
 - When the app needs to perform actions specific to an individual user (_on behalf of the user_), delegated permissions are used, requiring user authentication and consent.
-- If the permissions required by the application can change dynamically based on runtime conditions, leveraging _Entra ID roles and policies_ would be more suitable.
-- For short-lived operations that don't require persistent permissions, _token-based or key-based temporary access methods_ could be more fitting.
+- When different users need different levels of access, use delegated permissions with the [dynamic consent](https://learn.microsoft.com/en-us/entra/identity-platform/howto-update-permissions?pivots=ms-graph#add-permissions-into-dynamic-consent) to request permissions on-demand.
+- For short-lived operations that don't require persistent permissions, _token-based or key-based temporary access_ could be more fitting.
 
+**📝 NOTE:** Microsoft Graph API is the gateway to all the data in a customer's Microsoft 365 and Entra ID tenant.
 ## Application Registration
 
 All applications _must [register with Entra ID](https://learn.microsoft.com/en-us/azure/app-service/configure-authentication-provider-aad?tabs=workforce-tenant)_ to delegate identity and access management: `Portal > app > 'Authentication' > 'Add identity provider' > set provider to Microsoft > 'Add'`. This creates an application object and a globally unique ID (app/client ID).
 
-- **Application Object**: Resides in the Entra ID tenant where the app is registered. It serves as the _global representation_ of your application for use across all tenants. This object has:
-
-  - A 1:1 relationship with the Software Application.
-  - A 1:N relationship with _Service Principal Objects_, meaning one Application Object can have multiple corresponding _Service Principal Objects_.
-
-- **[Service principals](https://learn.microsoft.com/en-us/azure/active-directory/develop/app-objects-and-service-principals?tabs=browser) Objects**: These are _local representations_ within each tenant (use **Enterprise applications** page in the Azure portal to manage). They are derived from the Application Object and come in three types:
-  - **Application**: Created when an app gains resource access permissions.
-  - **Managed Identity**: Automatically created when enabled. It grants access but is not directly modifiable.
-  - **Legacy**: For apps created before modern registration methods, restricted to the tenant where created.
-
 Changes to your application object also affect its service principals in the home tenant only. Deleting the application also deletes its home tenant service principal, but restoring that application object won't recover its service principals.
 
-List service principals associated with an app: `az ad sp list --filter "appId eq '{AppId}'"`
+List service principals associated with an app: `az ad sp list --filter "appId eq '<app-id>'"`
 
 | [Integrate authentication and authorization](https://learn.microsoft.com/en-us/entra/identity-platform/media/v2-overview/application-scenarios-identity-platform.png) | Web App | Backend API                                                                            | Daemon |
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------- | ------ |
@@ -3768,30 +3785,37 @@ To [protect an API in Azure API Management](https://learn.microsoft.com/en-us/az
 - `<Permission-Id>=Scope`: Delegated permissions
 - `<Permission-Id>=Role`: Application permissions
 
-## [Permissions (Scopes)](https://learn.microsoft.com/en-us/azure/active-directory/develop/permissions-consent-overview)
+## [Permissions (Scopes)](https://learn.microsoft.com/en-us/entra/identity-platform/permissions-consent-overview#types-of-permissions)
 
-The app specifies required permissions using the `scope` query parameter, which defines the resource type. If unspecified, the default resource is Microsoft Graph. For instance, `scope=User.Read` is the same as `https://graph.microsoft.com/User.Read`.
+The app specifies required permissions using the `scope` query parameter, comprises of resource and permissions. If resource is unspecified, the default resource is Microsoft Graph. For instance, `scope=User.Read` is the same as `https://graph.microsoft.com/User.Read`.
 
 | Permission types | Delegated permissions                                                    | Application permissions                    |
 | ---------------- | ------------------------------------------------------------------------ | ------------------------------------------ |
-| Access context   | Get access on behalf of a user (a signed-in user is present)             | Get access without a user (signed-in user) |
-| Types of apps    | Web / Mobile / single-page app (SPA)                                     | Web / Daemon / Background services         |
-| Other names      | Scopes / OAuth2 permission scopes                                        | App / App-only permissions roles           |
+| Access context   | Get access on behalf of a user (a signed-in user is present)             | Get access without a user |
+| Types of apps    | Web / Mobile / single-page app (SPA)                                     | Web / Daemon / Background services / Automation         |
+| Other names      | Scopes<br>OAuth2 permission scopes                                        | App roles<br>App-only permissions           |
 | Who can consent  | - Users can consent for their data<br>- Admins can consent for all users | Only admin can consent                     |
-| Consent methods  | Static or Dynamic                                                        | Static ONLY                                |
+| Consent methods  | - Static: configured list on app registration<br>- Dynamic: request individual permissions at sign-in                                                        | Static ONLY                                |
 
+```bash
+# API permission to an existing Entra ID app registration.
 `az ad app permission add --id {appId} --api {apiID} --api-permissions {permissionId}={Scope,Role}`
-
+```
+Breakdown of above command:
+- {apiID}: This specifies the resource API your app wants to access. This could be Microsoft Graph, [Azure Key Vault or another API](https://gemini.google.com/share/d66e663a704f).
+- {permissionId}: The unique ID for the permission you want (e.g., the ID for User.Read or Mail.Send).
 - Scope: Defines **what the application is allowed to do** on behalf of a user.
-- Role: Defines more privileged **operations that the application can perform**, often without a user
+- Role: Defines more privileged **operations that the application can perform**, without a user.
 
 ### [Consent](https://learn.microsoft.com/en-us/azure/active-directory/manage-apps/user-admin-consent-overview)
 
 - **Static user consent**: Requires all permissions to be specified in the Azure portal during app registration. Users or admins are prompted for consent if not previously granted. Issues: requires long lists of permissions and knowing all resources in advance.
 - **Incremental (Dynamic) user consent**: Allows permissions to be requested gradually. Scopes can be specified during runtime without predefinition in Azure portal.
-- **Admin consent**: needed for high-privilege permissions. Admins authorize apps to access privileged data. Requires static permissions registration. `az ad app permission admin-consent`
+- **Admin consent**: needed for [high-privilege permissions](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/user-admin-consent-overview#:~:text=highly%20privileged%20operations.%20Examples%20of%20such%20operations%20might%20be%20role%20management%2C%20full%20access%20to%20all%20mailboxes%20or%20all%20sites%2C%20and%20full%20user%20impersonation.). Admins authorize apps to access privileged data. `az ad app permission admin-consent`
 
-Requesting individual user consent:
+[Admin consent workflow](https://learn.microsoft.com/en-us/entra/identity/enterprise-apps/configure-admin-consent-workflow) gives admins a secure way to grant access to applications that require admin approval. When a user tries to access an application but is unable to provide consent, they can send a request for admin approval. The request is sent via email to admins who are designated as reviewers. 
+
+[Requesting individual user consent](https://learn.microsoft.com/en-us/entra/identity-platform/consent-types-developer#requesting-individual-user-consent):
 
 ```http
 GET https://login.microsoftonline.com/common/oauth2/v2.0/authorize?
@@ -3803,12 +3827,12 @@ client_id=00001111-aaaa-2222-bbbb-3333cccc4444
 &state=12345
 ```
 
-## [Conditional Access](https://learn.microsoft.com/en-us/azure/active-directory/conditional-access/overview) (Premium P1 tier)
-
+## [Conditional Access](https://learn.microsoft.com/en-us/azure/active-directory/conditional-access/overview) (Premium P1+ tier)
+Combines signals including user or group membership, IP location information, device compliance status, application details, and real-time risk detection to make access decisions. Some examples of conditional access policies:
 - Prompt additional verification (e.g., second password or fingerprint) when users sign in
-- Using a middle tier to solve a "challenge" presented by API
+- [Using a middle tier to solve a "challenge"](https://learn.microsoft.com/en-us/entra/identity-platform/v2-conditional-access-dev-guide#:~:text=The%20middle%20tier%20performs%20on%2Dbehalf%2Dof%20flow%20to%20request%20access%20to%20the%20downstream%20API.%20At%20this%20point%2C%20a%20claims%20%22challenge%22%20is%20presented%20to%20the%20middle%20tier.%20The%20middle%20tier%20sends%20the%20challenge%20back%20to%20the%20native%20app%2C%20which%20needs%20to%20comply%20with%20the%20Conditional%20Access%20policy.) presented by API
 - [Multi-Factor Authentication](https://learn.microsoft.com/en-us/azure/active-directory/authentication/concept-mfa-licensing) (**all Microsoft 365 plans**). When [Security Defaults](https://learn.microsoft.com/en-us/azure/active-directory/fundamentals/security-defaults) is enabled, MFA is activated for **all users**. To apply MFA to specific users only, _disable Security Defaults_.
-- Risk-based policies (require Entra ID Identity Protection - **Premium P2** tier)
+- [Risk-based policies](https://learn.microsoft.com/en-us/entra/fundamentals/security-defaults#:~:text=These%20policies%20need,strengthen%20their%20posture.) (require Entra ID Identity Protection - **Premium P2** tier)
 - Device restrictions (enrolled in Microsoft's Intune service)
 - Certain physical locations or IP ranges
 
@@ -3820,9 +3844,9 @@ Apps don't need to be changed, unless they need silent or indirect services acce
 
 - [Entra ID B2C](https://learn.microsoft.com/en-us/azure/active-directory-b2c/overview) supports multiple login methods, including social media, email/password.
 - [Entra ID B2B](https://learn.microsoft.com/en-us/azure/active-directory/external-identities/what-is-b2b) allows you to share your company's applications with external users in a secure manner.
-- [Entra ID Application Proxy](https://learn.microsoft.com/en-us/azure/active-directory/app-proxy/what-is-application-proxy) provides secure remote access to on-premises applications.
-- [Entra ID Connect](https://en.wikipedia.org/wiki/Azure_AD_Connect) allows you to synchronize an AD tenant with an on-premises AD domain.
-- [Entra ID Enterprise Application](https://learn.microsoft.com/en-us/azure/active-directory/manage-apps/add-application-portal) allow you to integrate other applications with Entra ID, including your own apps.
+- [Entra ID Application Proxy](https://learn.microsoft.com/en-us/entra/identity/app-proxy/overview-what-is-app-proxy) provides secure remote access to on-premises applications.
+- [Entra ID Connect](https://learn.microsoft.com/en-us/entra/identity/hybrid/connect/whatis-azure-ad-connect) allows you to synchronize hybrid identities.
+- [Entra ID Enterprise Application](https://learn.microsoft.com/en-us/azure/active-directory/manage-apps/add-application-portal) allow you to integrate other applications with Entra ID, including your own/enterprise apps.
 
 ## MSAL (Microsoft Authentication Library)
 
@@ -3842,7 +3866,7 @@ Enables secure access to various APIs, with a unified API across platforms.
 | Client credentials | Confidential     | Daemon, Backend                                   | App Secret/Certificate                      |
 | On-behalf-of       | Both             | Service-to-Service, Service-to-API, Microservices | Uses an existing token to get another       |
 | Device code        | Public           | IoT, CLI                                          | Polls the endpoint until user authenticates |
-| Implicit           | Public           | Legacy SPAs                                       | Token in URI fragment                       |
+| Implicit Grant           | Public           | Legacy SPAs                                       | Token in URI fragment                       |
 | Integrated Windows | Both             | Intranet Apps                                     | Auto auth on domain / Entra ID-joined PCs   |
 | Interactive        | Public           | User Interactive Apps                             | Requires user action                        |
 | Username/password  | Both             | Legacy, Testing                                   | Direct with Credentials                     |
@@ -3850,11 +3874,13 @@ Enables secure access to various APIs, with a unified API across platforms.
 - **Public client applications**: User-facing apps without the ability to securely store secrets. They interact with web APIs on the user's behalf.
 - **Confidential client applications**: Server-based apps and daemons that can securely handle secrets. Each instance maintains a unique configuration, including identifiers and secrets.
 
-### Working with MSAL
+**📝 NOTE:** It's no longer recommended to use the implicit grant flow. If you're building a SPA, use the `authorization code flow with PKCE` instead.
 
-When building web apps or public client apps that require a broker, ensure to set the `redirectUri`. This URL is used by the identity provider to return security tokens to your application.
+### [Working with MSAL](https://learn.microsoft.com/en-us/entra/msal/dotnet/)
 
-Integrating Entra ID authentication into an ASP.NET Core application:
+When building web apps or public client apps that [require a broker](https://learn.microsoft.com/en-us/entra/msal/dotnet/getting-started/instantiate-public-client-config-options#:~:text=For%20web%20apps%2C%20and%20sometimes%20for%20public%20client%20apps%20(in%20particular%20when%20your%20app%20needs%20to%20use%20a%20broker)%2C%20you%27ll%20have%20also%20set%20the%20redirectUri%20where%20the%20identity%20provider%20will%20contact%20back%20your%20application%20with%20the%20security%20tokens.), ensure to set the `redirectUri`. This URL is used by the identity provider to return security tokens to your application.
+
+[Integrating Entra ID authentication into an ASP.NET Core application](https://learn.microsoft.com/en-us/entra/identity-platform/tutorial-web-app-dotnet-sign-in-users?tabs=workforce-tenant):
 
 ```cs
 builder.Services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
@@ -3868,11 +3894,13 @@ builder.Services.AddRazorPages()
 // CookieAuthenticationDefaults.AuthenticationScheme: Employs cookies for session-based authentication, optimal for traditional web apps that manage user sessions server-side.
 // Custom Authentication Scheme: Allows for custom string identifiers for authentication middleware, ideal for specialized or unique authentication scenarios.
 ```
-
+[Initializing a public client application](https://learn.microsoft.com/en-us/entra/msal/dotnet/getting-started/initializing-client-applications#initializing-a-public-client-application-from-code):
 ```cs
 // Sign in users in the Microsoft Azure public cloud using their work and school accounts or personal Microsoft accounts.
 IPublicClientApplication app = PublicClientApplicationBuilder.Create(clientId).Build();
-
+```
+[Initializing a confidential client application](https://learn.microsoft.com/en-us/entra/msal/dotnet/getting-started/initializing-client-applications#initializing-a-confidential-client-application-from-code):
+```cs
 // Confidential application that handles tokens from Microsoft Azure users using a shared client secret for identification.
 // Example: A daemon application that does not interact with the user and acts on its own behalf, like a service accessing Graph API
 IConfidentialClientApplication app = ConfidentialClientApplicationBuilder.Create(clientId)
@@ -3881,27 +3909,27 @@ IConfidentialClientApplication app = ConfidentialClientApplicationBuilder.Create
     .Build();
 ```
 
-Common modifiers:
+[Common modifiers](https://learn.microsoft.com/en-us/entra/msal/dotnet/getting-started/initializing-client-applications#modifiers-common-to-public-and-confidential-client-applications):
 
 | Modifier                                              | Description                                                                                                                                                                                                                                                                                     |
 | ----------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.WithAuthority()`                                    | Sets the application default authority to an Microsoft Entra ID authority, with the possibility of choosing the Azure Cloud, the audience, the tenant (tenant ID or domain name), or providing directly the authority URI. Example: `.WithAuthority(AzureCloudInstance.AzurePublic, _tenantId)` |
+| `.WithAuthority(AadAuthorityAudience authorityAudience, bool validateAuthority)`                                    | Sets the application default authority to an Microsoft Entra ID authority, with the possibility of choosing the Azure Cloud, the audience, the tenant (tenant ID or domain name), or providing directly the authority URI. Example: `.WithAuthority(AzureCloudInstance.AzurePublic, _tenantId)` |
 | `.WithTenantId(string tenantId)`                      | Overrides the tenant ID, or the tenant description.                                                                                                                                                                                                                                             |
 | `.WithClientId(string)`                               | Overrides the client ID.                                                                                                                                                                                                                                                                        |
 | `.WithRedirectUri(string redirectUri)`                | Overrides the default redirect URI (ex: for scenarios requiring a broker)                                                                                                                                                                                                                       |
 | `.WithComponent(string)`                              | Sets the name of the library using MSAL.NET (for telemetry reasons).                                                                                                                                                                                                                            |
 | `.WithDebugLoggingCallback()`                         | If called, the application calls Debug.Write simply enabling debugging traces.                                                                                                                                                                                                                  |
-| `.WithLogging()`                                      | If called, the application calls a callback with debugging traces.                                                                                                                                                                                                                              |
+| `.WithLogging()`                                      | If called, the application calls a callback with debugging traces. Allows you to route MSAL's logs into your application's own logging framework (like Serilog, NLog, or Application Insights).                                                                                                                                                                                                                             |
 | `.WithTelemetry(TelemetryCallback telemetryCallback)` | Sets the delegate used to send telemetry.                                                                                                                                                                                                                                                       |
 
-Confidential client application only:
+[Confidential client application only](https://learn.microsoft.com/en-us/entra/msal/dotnet/getting-started/initializing-client-applications#modifiers-specific-to-confidential-client-applications):
 
 | Modifier                                         | Description                                                                                |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------ |
 | `.WithCertificate(X509Certificate2 certificate)` | Sets the certificate identifying the application with Microsoft Entra ID.                  |
 | `.WithClientSecret(string clientSecret)`         | Sets the client secret (app password) identifying the application with Microsoft Entra ID. |
 
-Acquiring Token:
+[Acquiring Token](https://learn.microsoft.com/en-us/entra/msal/dotnet/acquiring-tokens/desktop-mobile/acquiring-tokens-interactively):
 
 ```cs
 string[] scopes = { "user.read" };
@@ -3911,7 +3939,7 @@ Console.WriteLine($"Token: {result.AccessToken}");
 
 ## [Application manifest](https://learn.microsoft.com/en-us/azure/active-directory/develop/reference-app-manifest)
 
-An Entra ID application manifest configures an app's identity and attributes, facilitating OAuth authorization and user consent. It serves as a mechanism for updating the application object in the Microsoft identity platform.
+Configures an app's identity and attributes, facilitating OAuth authorization and user consent. Also serves as a mechanism for updating the application object.
 
 - `signInAudience`:
 
@@ -3920,15 +3948,17 @@ An Entra ID application manifest configures an app's identity and attributes, fa
   - `AzureADandPersonalMicrosoftAccount` - Users with a personal Microsoft account, or a work or school account in any organization's Microsoft Entra tenant
   - `PersonalMicrosoftAccount` - Personal accounts that are used to sign in to services like Xbox and Skype.
 
-- `groupMembershipClaims`: (_Tenant-specific_) Groups claim issued in access token that the app expects. Groups persist even after the associated app is removed.
+- `groupMembershipClaims`: (_Tenant-specific_) Configures the groups claim. It tells Entra ID which of the user's groups to list in the groups claim every time it issues a token for this specific app. Entra ID group objects in the tenant are unaffected when the associated app is removed.
 
   - "None"
   - "SecurityGroup" (will include security groups and Entra ID roles)
   - "ApplicationGroup" (this option includes only groups that are assigned to the application)
   - "DirectoryRole" (gets the Entra ID directory roles the user is a member of)
-  - "All" (this will get all of the security groups, distribution groups, and Entra ID directory roles that the signed-in user is a member of).
+  - "All" (gets all of the security groups, distribution groups, and Entra ID directory roles that the signed-in user is a member of).
 
-- [`appRoles`](https://learn.microsoft.com/en-us/azure/active-directory/develop/howto-add-app-roles-in-apps) (_Application-specific_): Collection of roles that an app may declare. Defined in the app registration, and will get removed with it. Correspond to `Role` in `--api-permissions`
+**📝 NOTE:** In `Client Credentials Flow` (e.g. `for a Daemon service`): When a daemon app (a service principal) authenticates using its own credentials (a secret or certificate), it's an "app-only" context. The Entra ID token service only looks for app roles assigned directly to that service principal. It does not check the service principal's group memberships to find inherited roles.
+
+- [`appRoles`](https://learn.microsoft.com/en-us/azure/active-directory/develop/howto-add-app-roles-in-apps) (_Application-specific_): Collection of roles that an app may declare. Defined in the app registration, and will get removed with it. Correspond to `Role` in `--api-permissions`.
 
   ```jsonc
   "appRoles": [{
@@ -3936,11 +3966,15 @@ An Entra ID application manifest configures an app's identity and attributes, fa
       "value": "ReadOnly" // expected value of the roles claim in the token, which must match the string in the application's code without spaces.
   }]
   ```
+**📝 NOTE:** Currently, if you add a service principal to a group, and then assign an app role to that group, Microsoft Entra ID doesn't add the roles claim to tokens it issues.
+
+**📝 NOTE:** Group-based app role assignments are primarily for granting permissions to human users. When a user authenticates, their group memberships are evaluated to determine their roles. Service principals: When an application authenticates using the client credentials flow, it acts on its own identity (its service principal), not on behalf of a user. The system only includes claims based on roles directly assigned to that service principal.
 
 - `oauth2Permissions`: Specifies the collection of OAuth 2.0 permission scopes that the web API (resource) app exposes to client apps. Correspond to `Scope` in `--api-permissions`.
 
 - `oauth2AllowImplicitFlow` - If the web app can request implicit flow access tokens (`oauth2AllowIdTokenImplicitFlow` for ID tokens). ⭐: SPAs, when using Implicit Grant Flow.
 
+### [Other Important Attributes](https://learn.microsoft.com/en-us/entra/identity-platform/reference-app-manifest#manifest-reference)
 | Attribute Name               | Brief Explanation                                                                                                                     |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `requiredResourceAccess`     | Specifies the resources that the app requires access to.                                                                              |
@@ -3969,10 +4003,38 @@ An Entra ID application manifest configures an app's identity and attributes, fa
 | `name`                       | The display name for the app.                                                                                                         |
 | `id`                         | The unique identifier for the app in the directory.                                                                                   |
 
+### Mapping Attributes to CLI
+| Application Manifest Attribute | Azure CLI `--api-permissions` Value | Type |
+|-------------------------------|-------------------------------------|------|
+| `appRoles` | `Role` | Application permissions (app-only) |
+| `oauth2Permissions` | `Scope` | Delegated permissions (on behalf of user) |
+
 ## ASP.NET Core Authorization: Working with Roles, Claims, and Policies
 
+### Hierarchy Overview
+
+```
+┌─────────────────────────────────────┐
+│          POLICIES                    │  ← Most Powerful
+│  (Can combine roles + claims +       │
+│   custom logic)                      │
+└────────────┬────────────────────────┘
+             │ uses
+             ↓
+┌─────────────────────────────────────┐
+│          ROLES                       │  ← Medium Flexibility
+│  (Implemented as special claims)     │
+└────────────┬────────────────────────┘
+             │ built on
+             ↓
+┌─────────────────────────────────────┐
+│          CLAIMS                      │  ← Foundation
+│  (Raw identity data)                 │
+└─────────────────────────────────────┘
+```
+
 - [**Policies**](https://learn.microsoft.com/en-us/aspnet/core/security/authorization/policies?view=aspnetcore-3.1): A policy is a function that can look at a user's identity and decide whether they are authorized to perform a given action.
-- [**Roles**](https://learn.microsoft.com/en-us/aspnet/core/security/authorization/roles?view=aspnetcore-3.1): A role represents a group of users that have certain privileges as defined by the role.
+- [**Roles**](https://learn.microsoft.com/en-us/aspnet/core/security/authorization/roles?view=aspnetcore-3.1): Specifies whether the current user is a member of the roles necessary to access the requested resource.
 - [**Claims**](https://learn.microsoft.com/en-us/aspnet/core/security/authorization/claims?view=aspnetcore-3.1): A claim is a name-value pair that represents what the subject is, not what the subject can do.
 
 ```cs
@@ -4007,12 +4069,15 @@ public async Task<IActionResult> Login(LoginViewModel model)
   var user = await _userManager.FindByNameAsync(model.Username);
   var claim = new Claim("EmployeeNumber", "123");
   await _userManager.AddClaimAsync(user, claim);
+  await _signInManager.SignInAsync(user, isPersistent: false); // Sign in the user
+
+  return RedirectToAction("Index", "Home");
 }
 
-[Authorize(Policy = "ClientsOnly")] // Allow premium clients only
+[Authorize(Policy = "ClientsOnly")] // Allow clients with any subscription tier
 public class AdminController : Controller { }
 
-[Authorize(Role = "CorporateClient")] // Allow corporate clients only
+[Authorize(Roles = "CorporateClient")] // Allow corporate clients only
 public class AdminController : Controller { }
 
 [Authorize(Policy = "EmployeeOnly")] // Apply EmployeeOnly policy
@@ -5503,7 +5568,7 @@ var content = await response.Content.ReadAsStringAsync();
 
 ### Using SDK
 
-```csharp
+```cs
 var scopes = new[] { "User.Read" };
 
 // Multi-tenant apps can use "common",
@@ -5629,17 +5694,17 @@ Get secret version: `GET {vaultBaseUrl}/secrets/{secret-name}/{secret-version}?a
 
 ## Key operations
 
-| Operation                    | Command                                                                                                       | Description                                                                                                                                                                                                             |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Manual Key Rotation      | `az keyvault key rotate --name <YourKeyName> --vault-name <YourVaultName>`                                          | Manually rotate a key to create a new version                                                                                                                                                                           |
-| [Automated Key Rotation](https://learn.microsoft.com/en-us/cli/azure/keyvault/key/rotation-policy?view=azure-cli-latest#az-keyvault-key-rotation-policy-update-examples)   | `az keyvault key rotation-policy update --name <YourKeyName> --vault-name <YourVaultName> --value path/to/policy.json`     | Configure automated rotation policy (e.g., time-based). |
-| List All Keys            | `az keyvault key list --vault-name <YourVaultName>`                                                        | List all keys in the vault                                                                                                                                                                                              |
-| List Enabled Keys Only   | `az keyvault key list --vault-name <YourVaultName> --query "[?attributes.enabled].name" -o tsv`            | Filter and display only enabled key names using JMESPath query                                                                                                                                                          |
-| Backup Key               | `az keyvault key backup --name <YourKeyName> --vault-name <YourVaultName> --file ./old-key-backup.blob` | Create a backup of a key to a file                                                                                                                                                                                      |
-| Delete Key (Soft Delete) | `az keyvault key delete --name <YourKeyName> --vault-name <YourVaultName>`                              | Move key to soft-deleted state (if enabled) or remove it                                                                                                                                                                |
-| Purge Key (Permanent)    | `az keyvault key purge --name <YourKeyName> --vault-name <YourVaultName>`                               | Permanently remove a soft-deleted key. Only applicable for soft-delete enabled vaults                                                                                                                                   |
+| Operation                                                                                                                                                                | Command                                                                                                                | Description                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Manual Key Rotation                                                                                                                                                      | `az keyvault key rotate --name <YourKeyName> --vault-name <YourVaultName>`                                             | Manually rotate a key to create a new version                                         |
+| [Automated Key Rotation](https://learn.microsoft.com/en-us/cli/azure/keyvault/key/rotation-policy?view=azure-cli-latest#az-keyvault-key-rotation-policy-update-examples) | `az keyvault key rotation-policy update --name <YourKeyName> --vault-name <YourVaultName> --value path/to/policy.json` | Configure automated rotation policy (e.g., time-based).                               |
+| List All Keys                                                                                                                                                            | `az keyvault key list --vault-name <YourVaultName>`                                                                    | List all keys in the vault                                                            |
+| List Enabled Keys Only                                                                                                                                                   | `az keyvault key list --vault-name <YourVaultName> --query "[?attributes.enabled].name" -o tsv`                        | Filter and display only enabled key names using JMESPath query                        |
+| Backup Key                                                                                                                                                               | `az keyvault key backup --name <YourKeyName> --vault-name <YourVaultName> --file ./old-key-backup.blob`                | Create a backup of a key to a file                                                    |
+| Delete Key (Soft Delete)                                                                                                                                                 | `az keyvault key delete --name <YourKeyName> --vault-name <YourVaultName>`                                             | Move key to soft-deleted state (if enabled) or remove it                              |
+| Purge Key (Permanent)                                                                                                                                                    | `az keyvault key purge --name <YourKeyName> --vault-name <YourVaultName>`                                              | Permanently remove a soft-deleted key. Only applicable for soft-delete enabled vaults |
 
-**📝 NOTE:** Latter sends an event to Azure Event Grid, which you can subscribe to for sending email alerts.  
+**📝 NOTE:** Latter sends an event to Azure Event Grid, which you can subscribe to for sending email alerts.
 
 ### Access Model
 
@@ -5662,7 +5727,8 @@ For applications, there are two ways to obtain a service principal - first is re
 - If you can't use managed identity, you instead register the application with your Entra ID tenant. Registration also creates a second object (`Application Object`, as global definition of your app) that identifies the app across all tenants.
 
 #### Usage
-```csharp
+
+```cs
 string keyVaultName = Environment.GetEnvironmentVariable("KEY_VAULT_NAME");
 var kvUri = "https://" + keyVaultName + ".vault.azure.net";
 
@@ -5708,6 +5774,7 @@ The `WWW-Authenticate` header parameters are:
 - `resource`: Resource name (`https://vault.azure.net`) for the authorization request.
 
 ### Authentication flow for "Get Secret" API
+
 <img src="https://learn.microsoft.com/en-us/azure/key-vault/media/authentication/authentication-flow.png" width="600">
 
 <br>
@@ -5734,6 +5801,7 @@ Create an access policy for your key vault that grants certificate permissions t
 ```sh
 az keyvault set-policy --name <your-key-vault-name> --upn user@domain.com --certificate-permissions delete get list create purge
 ```
+
 **📝 NOTE:** `--certificate-permissions` specifies the exact permissions that this user will have, but **only for certificates**. It does not grant any permissions for keys or secrets. UPN stands for User Principle Name.
 
 Store and retieve certificates:
@@ -5752,12 +5820,12 @@ await operation.WaitForCompletionAsync();
 var certificate = await client.GetCertificateAsync(certificateName);
 ```
 
-| Method           | `GetCertificateAsync()`   | `DownloadCertificateAsync()`         |
-| ---------------- | ------------------------- | ------------------------------------ |
-| Purpose          | Get metadata + public key | Get full bundle + private key        |
-| Returns          | `KeyVaultCertificate`     | [`X509Certificate2`](https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.x509certificates.x509certificate2?view=net-9.0)                   |
-| Has Private Key? | No                        | Yes (if permissions allow)           |
-| Permissions      | `certificates/get`        | `certificates/get` and `secrets/get` |
+| Method           | `GetCertificateAsync()`   | `DownloadCertificateAsync()`                                                                                                                   |
+| ---------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Purpose          | Get metadata + public key | Get full bundle + private key                                                                                                                  |
+| Returns          | `KeyVaultCertificate`     | [`X509Certificate2`](https://learn.microsoft.com/en-us/dotnet/api/system.security.cryptography.x509certificates.x509certificate2?view=net-9.0) |
+| Has Private Key? | No                        | Yes (if permissions allow)                                                                                                                     |
+| Permissions      | `certificates/get`        | `certificates/get` and `secrets/get`                                                                                                           |
 
 ## Best Practices
 
@@ -5765,7 +5833,7 @@ var certificate = await client.GetCertificateAsync(certificateName);
 - Restrict vault access to authorized applications and users. (`az keyvault set-policy --name <YourKeyVaultName> --object-id <PrincipalObjectId> --secret-permissions get list`)
 - Regularly backup your vault. (`az keyvault key backup --vault-name <YourKeyVaultName> --name <KeyName> --file <BackupFileName>`)
 - Enable logging and alerts.
-- Enable **soft-delete** and **purge protection** to keep secrets for 7-90 days and prevent forced deletion. 
+- Enable **soft-delete** and **purge protection** to keep secrets for 7-90 days and prevent forced deletion.
 
   ```sh
     az keyvault update --subscription {SUBSCRIPTION ID} -g {RESOURCE GROUP} -n {VAULT NAME} --enable-soft-delete true
@@ -5774,12 +5842,13 @@ var certificate = await client.GetCertificateAsync(certificateName);
 
 ## Charging
 
-- Charges apply for HSM-keys (charge per key version per month) in the last 30 days of use. After that, since the object is in deleted state no operations can be performed against it, so no charge will apply. 
+- Charges apply for HSM-keys (charge per key version per month) in the last 30 days of use. After that, since the object is in deleted state no operations can be performed against it, so no charge will apply.
 - Operations are disabled on deleted objects, and no charges apply. (NOTE: _soft-delete_ increases security, but also _increases storage cost_!)
 
 **📝 NOTE:** Soft-delete can't be turned off for [Managed HSM, NOT standard Key Vault](https://learn.microsoft.com/en-us/azure/key-vault/managed-hsm/soft-delete-overview) resources. Soft-deleted Managed HSM resources will continue to be billed at their full hourly rate until they're purged.
 
 ## [Disaster and recovery](https://learn.microsoft.com/en-us/azure/key-vault/general/disaster-recovery-guidance)
+
 Below applies for both Standard and Premium tiers.
 
 | Region Type          | Within-Region Replication                          | Cross-Region Replication         | Behavior During Regional Failure                                          | Examples                                      |
@@ -5860,7 +5929,7 @@ public static class KeyVaultMonitoring
         // Parse the Event Grid event from the JSON payload
         // BinaryData provides efficient handling of the JSON string
         var eventGridEvent = EventGridEvent.Parse(new BinaryData(requestBody));
-        
+
         // --- Process the Event ---
 
         // Use a switch statement on the EventType property to determine
@@ -5875,7 +5944,7 @@ public static class KeyVaultMonitoring
                 // eventGridEvent.Data contains the specific payload for this event,
                 // which includes the VaultName, ObjectName, etc.
                 log.LogInformation($"Event Data: {eventGridEvent.Data}");
-                
+
                 // TODO: Add your logic here.
                 // e.g., send an email, update a database, post to Teams.
                 break;
@@ -5884,9 +5953,9 @@ public static class KeyVaultMonitoring
             case SystemEventNames.KeyVaultKeyNewVersionCreated:
                 log.LogInformation($"A new key version was created.");
                 log.LogInformation($"Event Data: {eventGridEvent.Data}");
-                
+
                 // TODO: Add your logic here.
-                break;            
+                break;
 
             // This is not an error - it's normal to receive events you don't process
             // Event Grid may send validation events or other system events
@@ -5895,7 +5964,7 @@ public static class KeyVaultMonitoring
                 log.LogInformation($"Event data: {eventGridEvent.Data}");
                 break;
         }
-        
+
         // Return HTTP 200 OK to acknowledge successful receipt to Event Grid
         // Returning errors causes Event Grid to retry, which can cause duplicate processing
         return new OkResult();
@@ -5923,36 +5992,50 @@ DecryptResult decryptResult = cryptoClient.Decrypt(EncryptionAlgorithm.RsaOaep, 
 
 # [Azure Managed Identities](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/)
 
-Enables [`Azure-hosted apps/VMs`](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/managed-identities-status) to access other services without handling credentials. These identities are Azure-exclusive and can't be used with other cloud providers.
+Enables [`Azure-hosted apps/VMs`](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/managed-identities-status#:~:text=This%20page%20provides%20links%20to%20services%27%20content%20that%20can%20use%20managed%20identities%20to%20access%20other%20Azure%20resources) to access other services without handling credentials. These identities are Azure-exclusive and can't be used with other cloud providers.
+
+For full list of supported services and details, [click](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/managed-identities-status).
 
 **📝 NOTE:** If you change a managed identity's group/role membership to add or remove permissions, you must wait up to 24 hours.
 
-| Property                       | System-assigned managed identity                                                                                                                                       | User-assigned managed identity                                                                                                                                                                                                                                                                                                                                    |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Creation                       | Created as part of an Azure resource (e.g. `Azure Virtual Machines` or `Azure App Service`).                                                                       | Created as a stand-alone Azure resource.                                                                                                                                                                                                                                                                                                                          |
-| Life cycle                     | Shared life cycle with the Azure resource.<br>Deleted when the parent resource is deleted.<br>Cannot be explicitly deleted.                                            | Independent life cycle.<br>Must be explicitly deleted.                                                                                                                                                                                                                                                                                                            |
-| Sharing across Azure resources | Can’t be shared.<br>It can only be associated with a single Azure resource.                                                                                            | Can be shared.<br>The same user-assigned managed identity can be associated (shared) with more than one Azure resource.                                                                                                                                                                                                                                           |
-| Common use cases               | Workloads contained within a single Azure resource.<br>Workloads needing independent identities.<br>For example, an application that runs on a single virtual machine. | Workloads that run on multiple resources and can share a single identity.<br>[Workloads needing pre-authorization](https://gemini.google.com/share/3a088a2cbf6f) to a secure resource, as part of a provisioning flow.<br>Workloads where resources are recycled frequently, but permissions should stay consistent.<br>For example, a workload where multiple virtual machines need to access the same resource. |
+[S.A.M.I vs U.A.M.I](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview#differences-between-system-assigned-and-user-assigned-managed-identities)
+| Property                       | System-assigned managed identity                                                                                                                                       | User-assigned managed identity                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Creation                       | Created as part of an Azure resource (e.g. `Azure Virtual Machines` or `Azure App Service`).                                                                           | Created as a stand-alone Azure resource.                                                                                                                                                                                                                                                                                                                                                                          |
+| Life cycle                     | Shared life cycle with the Azure resource.<br>Deleted when the parent resource is deleted.                                            | Independent life cycle.<br>Must be explicitly deleted.                                                                                                                                                                                                                                                                                                                                                            |
+| Sharing across Azure resources | Can’t be shared.<br>It can only be associated with a single Azure resource.                                                                                            | Can be shared.<br>The same user-assigned managed identity can be associated (shared) with more than one Azure resource.                                                                                                                                                                                                                                                                                           |
+| Common use cases               | Workloads contained within a single Azure resource.<br>Workloads needing independent identities.<br>For example, an application that runs on a single virtual machine. | Workloads that run on multiple resources and can share a single identity.<br>[Workloads needing pre-authorization](https://gemini.google.com/share/3a088a2cbf6f#:~:text=For%20your%20scenario,you%20deploy%20it.) to a secure resource, as part of a provisioning flow.<br>Workloads where resources are recycled frequently, but permissions should stay consistent.<br>For example, a workload where multiple virtual machines need to access the same resource. |
 
 **📝 NOTE:** If you have multi-tenant setup, use `Application Service Principal`!
 
 ## [Role-based access control (Azure RBAC)](https://learn.microsoft.com/en-us/azure/role-based-access-control/role-assignments-portal#assign-a-user-as-an-administrator-of-a-subscription)
 
-Manage access to Azure resources. To assign Azure roles, you must have `Microsoft.Authorization/roleAssignments/write` permissions, such as `User Access Administrator` or `Owner`.
+Manages access to Azure resources. To assign Azure roles, you must have `Microsoft.Authorization/roleAssignments/write` permissions, belong to such as `User Access Administrator`, `Role Based Access Control Administrator` or `Owner` roles.
 
-Read access to all resources: `*/read`.
+```bash
+# Check specific permissions
+az role definition list --name "<role-name>" --query "[].permissions[].actions"
+```
 
-The inheritance order for scope is Management group, Subscription, Resource group, Resource. When assigning access, follow the rule of least privilege. Note: Double check if you are granting permissions for resource or resource group!
+Similarly, you can verify read access to all resources by permission: `*/read`.
 
-## Using Managed Identity with a Virtual Machine
+[**Roles**](https://docs.microsoft.com/en-us/azure/role-based-access-control/role-definitions): Defines what actions you can perform.
+  - **Owner**: Full access, including role assignment.
+  - **Contributor**: Full access, no role assignment.
+  - **Reader**: View-only.
+  - **User Access Administrator**: Manages user access to resources.
+  <br>
 
-1. **Initiate Managed Identity**: Request to enable (sistem assigned) or create (user assigned) managed identity via ARM.
-1. **Create Service Principal**: ARM sets a service principal in the trusted Entra ID tenant for the managed identity.
-1. **Configure Identity**: ARM updates [IMDS](https://learn.microsoft.com/en-us/azure/virtual-machines/instance-metadata-service) (VM Specific) with the service principal client ID and certificate.
-1. **Assign Roles & Access**: Use service principal information to grant access to Azure resources via RBAC.
-1. **Request Token**: Code on Azure resource asks for a token from IMDS: `http://169.254.169.254/metadata/identity/oauth2/token`
-1. **Retrieve Token**: By using the configured client ID and certificate, Entra ID returns a JWT access token upon request.
-1. **Use Token**: Code uses the token to authenticate with Entra ID-supported services.
+**📝 NOTE:** [Deny assignments](https://docs.microsoft.com/en-us/azure/role-based-access-control/deny-assignments) **override role assignments** to block specific actions.
+
+[**Scope Levels**](https://docs.microsoft.com/en-us/azure/role-based-access-control/scope-overview): Defines where actions apply.
+  - **Management Group** (largest scope)
+    - **Subscription**
+      - **Resource Group**
+        - **Resource** (smallest scope)
+  <br>
+
+**📝 NOTE:** When assigning access, follow the rule of least privilege. A role assigned at a higher level automatically applies to all lower levels in scope.
 
 ## Managing Identities
 
@@ -5960,10 +6043,10 @@ The inheritance order for scope is Management group, Subscription, Resource grou
 
    ```sh
    # Creating a resource (like a VM or any other service that supports it) with a system-assigned identity
-   az <service> create --resource-group $resourceGroup --name myResource --assign-identity '[system]'
+   az <service> create --resource-group $resourceGroup --name myResource --assign-identity [system]
 
    # Assigning a system-assigned identity to an existing resource
-   az <service> identity assign --resource-group $resourceGroup --name myResource --identities '[system]'
+   az <service> identity assign --resource-group $resourceGroup --name myResource --identities [system]
    ```
 
 1. **User-assigned Identity**
@@ -5987,39 +6070,37 @@ Both system-assigned and user-assigned managed identities can be assigned specif
 az role assignment create --assignee <PrincipalId> --role <RoleName> --scope <Scope>
 ```
 
-## Azure Access Control
+### RBAC Scope Requirements for `az identity` Commands
 
-- [**Roles**](https://docs.microsoft.com/en-us/azure/role-based-access-control/role-definitions): Define what actions you can perform.
-  - **Owner**: Full access, including role assignment.
-  - **Contributor**: Full access, no role assignment.
-  - **Reader**: View-only.
-  - **User Access Administrator**: Manages user access to resources.
-- [**Scopes**](https://docs.microsoft.com/en-us/azure/role-based-access-control/scope-overview): Define where actions apply.
-  - **Management Group**: All subscriptions and resources.
-  - **Subscription**: All resources in subscription.
-  - **Resource Group**: All resources in group.
-  - **Resource**: Specific resource only.
+| Command | Minimum Scope Level | Required Role(s) | Notes |
+|---------|-------------------|------------------|-------|
+| `az identity create` | Resource Group | Managed Identity Contributor, Contributor, or Owner | Can create identities in the RG where you have permissions |
+| `az identity delete` | Resource Group | Managed Identity Contributor, Contributor, or Owner | Can delete identities from the RG where you have permissions |
+| `az identity show` | Resource Group | Managed Identity Contributor, Managed Identity Operator, Reader, or higher | Can view identity details |
+| `az identity list` | Resource Group / Subscription | Managed Identity Contributor, Managed Identity Operator, Reader, or higher | Lists identities within the scope |
+| `az identity assign` (to resource) | Resource + Resource Group | Managed Identity Operator (on identity) + Contributor/Owner (on target resource) | Requires permissions on both identity and target resource |
 
-[Deny assignments](https://docs.microsoft.com/en-us/azure/role-based-access-control/deny-assignments) **override role assignments** to block specific actions.
+- For more, [click](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/managed-identities-faq#which-azure-role-based-access-control-rbac-permissions-are-required-to-use-a-managed-identity-on-a-resource).
 
-### Hierarchy for managing a resource (from least to highest permission levels)
-
-- No role: Users or managed identities are granted only permissions they need, like read or write, without using a predefined role.
-- Resource `Reader`
-- Resource `Contributor`
-- Resource `Owner`
-- Resource `Administrator`
-- Global Administrator
+**📝 NOTE:** An Azure resource can have both a system-assigned and one or more user-assigned managed identities at a time.
 
 ## Acquiring an Access Token with Azure Managed Identities
 
 **DefaultAzureCredential**: This class attempts multiple methods of authentication based on the available environment or sign-in details, stopping once it's successful. It checks the following sources in order:
 
-1. Environment variables ([`EnvironmentCredential`](https://learn.microsoft.com/en-us/dotnet/api/azure.identity.environmentcredential?view=azure-dotnet)) - `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, in addition to:
-   - Service principle with secret ([`ClientSecretCredential`](https://learn.microsoft.com/en-us/dotnet/api/azure.identity.clientsecretcredential?view=azure-dotnet)): `AZURE_CLIENT_SECRET`
-   - Service principal with certificate ([`ClientCertificateCredential`](https://learn.microsoft.com/en-us/dotnet/api/azure.identity.clientcertificatecredential?view=azure-dotnet)): `AZURE_CLIENT_SECRET`, `AZURE_CLIENT_CERTIFICATE_PATH`, `AZURE_CLIENT_CERTIFICATE_PASSWORD`, `AZURE_CLIENT_SEND_CERTIFICATE_CHAIN`
-   - Username and password ([`UsernamePasswordCredential`](https://learn.microsoft.com/en-us/dotnet/api/azure.identity.usernamepasswordcredential?view=azure-dotnet)): `AZURE_USERNAME`, `AZURE_PASSWORD`
-1. Managed Identity if the application is deployed on an Azure host with this feature enabled.
+1. Environment variables ([`EnvironmentCredential`](https://learn.microsoft.com/en-us/dotnet/api/azure.identity.environmentcredential?view=azure-dotnet)): Checks for three possible combinations of environment variables.
+
+| Authentication Method | Required Environment Variables | Optional Environment Variables |
+|----------------------|-------------------------------|-------------------------------|
+| Service Principal with Secret | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` | - |
+| Service Principal with Certificate | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_CERTIFICATE_PATH` | `AZURE_CLIENT_CERTIFICATE_PASSWORD`, `AZURE_CLIENT_SEND_CERTIFICATE_CHAIN` |
+| Username/Password | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_USERNAME`, `AZURE_PASSWORD` | - |
+
+**📝 NOTE:** This credential ultimately uses a `ClientSecretCredential` or `ClientCertificateCredential`.
+
+2. [WorkloadIdentityCredential](https://learn.microsoft.com/en-us/dotnet/api/azure.identity.workloadidentitycredential?view=azure-dotnet) supports Microsoft Entra Workload ID authentication on **Kubernetes** and other hosts supporting workload identity.
+
+3. Managed Identity if the application is deployed on an Azure resource. If ManagedIdentityClientId (last line code snippet), it will check for that specific user-assigned identity.
 
    ```cs
    new ManagedIdentityCredential(); // system-assigned
@@ -6027,22 +6108,35 @@ az role assignment create --assignee <PrincipalId> --role <RoleName> --scope <Sc
    new DefaultAzureCredential(new DefaultAzureCredentialOptions { ManagedIdentityClientId = userAssignedClientId }); // user-assigned
    ```
 
-1. Visual Studio if the developer has authenticated through it.
-1. Azure CLI (`AzureCliCredential`) if the developer has authenticated through `az login` command.
-1. Azure PowerShell if the developer has authenticated via the `Connect-AzAccount` command.
-1. Interactive browser, though this option is disabled by default.
+3. `VisualStudioCredential` if the developer has authenticated through it. For Visual Studio 2017 or later.
+4. `VisualStudioCodeCredential`.
+5. Azure CLI (`AzureCliCredential`) if the developer has authenticated through `az login` command.
+6. Azure PowerShell (`AzurePowerShellCredential`) if the developer has authenticated via the `Connect-AzAccount` command.
+7. Azure Dev CLI (`AzureDeveloperCliCredential`).
+8. `InteractiveBrowserCredential`, though this option is disabled by default.
 
    ```cs
-   new InteractiveBrowserCredential();
    new DefaultAzureCredential(includeInteractiveCredentials: true);
    ```
 
 **ChainedTokenCredential**: Enables users to combine multiple credential instances to define a customized chain of credentials.
 
-```csharp
-// authenticate using managed identity, and fall back to authenticating via the Azure CLI if managed identity is unavailable in the current environment
+```cs
+// Authenticate using managed identity if it is available; otherwise use the Azure CLI to authenticate.
 var credential = new ChainedTokenCredential(new ManagedIdentityCredential(), new AzureCliCredential());
 ```
+### Quick Reference by Environment
+
+| Environment | Primary Credentials Used |
+|------------|-------------------------|
+| **Production (Azure)** | ManagedIdentityCredential (preferred) |
+| **Production (Non-Azure)** | EnvironmentCredential with Service Principal |
+| **Kubernetes/AKS** | WorkloadIdentityCredential or ManagedIdentityCredential |
+| **Local Development** | Visual Studio / VS Code / Azure CLI / PowerShell / Azure Developer CLI |
+| **CI/CD Pipelines** | EnvironmentCredential with Service Principal |
+| **Interactive Testing** | InteractiveBrowserCredential (must enable explicitly) |
+
+---
 
 ## [Logging](https://github.com/Azure/azure-sdk-for-net/blob/Azure.Identity_1.9.0/sdk/core/Azure.Core/samples/Diagnostics.md#logging)
 
@@ -6062,12 +6156,151 @@ DefaultAzureCredentialOptions options = new DefaultAzureCredentialOptions
     }
 };
 ```
+For more details, [click](https://github.com/Azure/azure-sdk-for-net/blob/main/sdk/eventhub/Azure.Messaging.EventHubs/samples/Sample10_AzureEventSourceListener.md#:~:text=In%20order%20for,inspected%20is%20used.).
 
 Exceptions: Service client methods raise `AuthenticationFailedException` for token issues.
 
 ## [Token caching](https://github.com/Azure/azure-sdk-for-net/blob/Azure.Identity_1.9.0/sdk/identity/Azure.Identity/samples/TokenCache.md)
 
-Tokens can be stored in _memory_ (default) or on _disk_ (opt-in). Use `TokenCachePersistenceOptions()` for default cache, specify a `Name` for isolated cache, and `UnsafeAllowUnencryptedStorage` for unencrypted storage. Different credentials support different caching types - CLI: None, Default and Managed - only cache, rest: both.
+### Default Cache (Shared)
+All applications share the same cache.
+```cs
+var options = new DefaultAzureCredentialOptions
+{
+    TokenCachePersistenceOptions = new TokenCachePersistenceOptions()
+};
+var credential = new DefaultAzureCredential(options);
+```
+
+### Isolated Cache (Named)
+Each application has its own cache.
+```cs
+var options = new DefaultAzureCredentialOptions
+{
+    TokenCachePersistenceOptions = new TokenCachePersistenceOptions
+    {
+        Name = "MyAppCache" // Separate cache per app
+    }
+};
+var credential = new DefaultAzureCredential(options);
+```
+
+### Unencrypted Storage (Not Recommended)
+Use only for testing/development.
+```cs
+var options = new DefaultAzureCredentialOptions
+{
+    TokenCachePersistenceOptions = new TokenCachePersistenceOptions
+    {
+        UnsafeAllowUnencryptedStorage = true // ⚠️ Security risk
+    }
+};
+var credential = new DefaultAzureCredential(options);
+```
+## [Cache Support by Credential Type](https://github.com/Azure/azure-sdk-for-net/blob/Azure.Identity_1.17.0/sdk/identity/Azure.Identity/samples/TokenCache.md#credentials-supporting-token-caching)
+
+| Credential Type | Memory Cache | Disk Cache |
+|-----------------|--------------|------------|
+| EnvironmentCredential | ✅ Yes | ✅ Yes |
+| ManagedIdentityCredential | ✅ Only | ❌ Not supported |
+| DefaultAzureCredential | ✅ Only(**\***) | ❌ Not supported |
+| AzureCliCredential | ❌ None | ❌ None |
+| InteractiveBrowserCredential | ✅ Yes | ✅ Yes |
+| DeviceCodeCredential | ✅ Yes | ✅ Yes |
+| ClientSecretCredential | ✅ Yes | ✅ Yes |
+
+(**\***): Supported if the target credential in the credential chain supports it.
+
+## Portal: Using Managed Identities for App Service and Azure Functions
+
+### Step 1: Enable Managed Identity
+
+#### For App Service:
+1. Go to Azure Portal → Navigate to your App Service
+2. Click **"Identity"** under Settings
+3. In **"System assigned"** tab → Switch to **"On"** → Click **"Save"**
+
+#### For Azure Functions:
+- **Automatically enabled** when creating new function apps
+- For existing apps: Go to Portal → Function App → Settings → **"Identity"** blade → Enable
+
+### Step 2: Assign Permissions to Managed Identity
+
+Once enabled, grant the identity access to required Azure resources:
+
+1. Navigate to the **target resource** (e.g., Storage Account, Key Vault)
+2. Open **"Access control (IAM)"**
+3. Click **"Add role assignment"**
+4. Select appropriate role (e.g., "Storage Blob Data Contributor")
+5. Search for your App Service/Function name in the dropdown
+6. Click **"Save"**
+
+**📝 NOTE:** System-assigned identities automatically get some permissions within the same subscription, but explicit role assignments are often still needed.
+
+### Step 3: Configure Target Resource
+
+**📝 NOTE:** For resources mentioned in this step, you might skip this step if you went for `default` settings on target resource which **disables Access Policy usage** anyways.  
+Some resources require additional configuration beyond IAM roles:
+
+- **Key Vault**: Must add an access policy containing the managed identity
+- **Azure SQL Database**: Requires Azure AD authentication setup
+- **General rule**: Target resource must accept Azure AD tokens
+
+**Why?** Even with a valid token, calls will be denied without proper resource-level configuration.
+
+### Step 4: Use Managed Identity in Code
+
+Azure SDKs **automatically detect and use** the managed identity when running in Azure.
+
+#### System-Assigned Identity Example:
+```cs
+using Azure.Storage.Blobs;
+using Azure.Identity;
+
+// DefaultAzureCredential automatically uses managed identity
+var blobServiceClient = new BlobServiceClient(
+    new Uri("https://your-storage-account.blob.core.windows.net/"), 
+    new DefaultAzureCredential());
+
+var containerClient = blobServiceClient.GetBlobContainerClient("your-container-name");
+```
+
+#### User-Assigned Identity Example:
+```cs
+using Azure.Identity;
+using Azure.Security.KeyVault.Secrets;
+
+var userAssignedIdentityClientId = "your-user-assigned-identity-client-id";
+var keyVaultUrl = "https://your-key-vault-name.vault.azure.net/";
+
+var client = new SecretClient(
+    new Uri(keyVaultUrl), 
+    new DefaultAzureCredential(new DefaultAzureCredentialOptions
+    {
+        ManagedIdentityClientId = userAssignedIdentityClientId
+    }));
+```
+
+### Step 5: Local Development (Optional)
+
+`DefaultAzureCredential()` works locally too by trying multiple authentication methods:
+- Environment variables
+- Visual Studio authentication
+- Azure CLI
+- Other local credentials
+
+You authenticate with your own user account locally, but the **same code works in Azure** with managed identity - no code changes needed!
+
+### How Token Retrieval Works
+
+Behind the scenes:
+1. App Service/Functions provides an **internal REST endpoint** (IMDS, Instance Metadata Service)
+2. Your app makes HTTP GET request to this endpoint
+3. Endpoint returns Azure AD token representing the **application** (not a user)
+4. Token is used to access Azure resources
+5. **Azure Identity library abstracts this** - you just use `DefaultAzureCredential()`
+
+---
 
 # [Message Queues](https://learn.microsoft.com/en-us/azure/service-bus-messaging/service-bus-azure-and-service-bus-queues-compared-contrasted)
 
@@ -6939,7 +7172,7 @@ StackExchange.Redis client library to be added:
 dotnet add package StackExchange.Redis
 ```
 
-```csharp
+```cs
 using StackExchange.Redis;
 
 // Static class to manage the singleton connection
@@ -6965,7 +7198,7 @@ public static class RedisConnection
 
 ### Patterns 1 & 2:
 
-```csharp
+```cs
 // Example object to cache
 public class Product
 {
@@ -7025,7 +7258,7 @@ dotnet add package Microsoft.Extensions.Caching.StackExchangeRedis
 
 Configure services in Program.cs:
 
-```csharp
+```cs
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. Get the connection string from appsettings.json
@@ -7058,7 +7291,7 @@ app.Run();
 
 Now in your controller, you can use HttpContext.Session:
 
-```csharp
+```cs
 [ApiController]
 [Route("[controller]")]
 public class MyController : ControllerBase
@@ -7083,7 +7316,7 @@ This is great for decoupled, real-time communication.
 
 **Publisher:**
 
-```csharp
+```cs
 using StackExchange.Redis;
 
 // Get the subscriber interface from the connection
@@ -7102,7 +7335,7 @@ Console.WriteLine("Message published.");
 
 **Subscriber:**
 
-```csharp
+```cs
 using StackExchange.Redis;
 
 // Get the subscriber interface
@@ -7200,7 +7433,7 @@ private static bool UtilizeTransactions(Dictionary<string, string> data, int exp
 
 ### **Expiration (TTL)**
 
-```csharp
+```cs
 using StackExchange.Redis;
 
 // Get your connection (ideally as a singleton)
@@ -7346,7 +7579,7 @@ Since `StackExchange.Redis` does not have strongly-typed methods for every modul
 
 This pattern is different from your existing "Cache-Aside" sample. Instead of serializing a C# object into a string, we send the JSON string to Redis and let _Redis_ store and understand it as a JSON object.
 
-```csharp
+```cs
 using StackExchange.Redis;
 using System.Text.Json;
 
@@ -7400,7 +7633,7 @@ public class JsonProductService
 
 This sample demonstrates creating a search index and querying it.
 
-```csharp
+```cs
 
 using StackExchange.Redis;
 
