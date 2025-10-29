@@ -1087,7 +1087,7 @@ string myConnectionStringEnv = Environment.GetEnvironmentVariable("SQLCONNSTR_My
 // Load: az webapp config connection-string set --resource-group $resourceGroup --name $appName --settings @conn-settings.json
 ```
 
-### General Settings
+### [General Settings](https://learn.microsoft.com/en-us/cli/azure/webapp/config?view=azure-cli-latest#az-webapp-config-set)
 
 ```sh
 az webapp config set --name $appName --resource-group $resourceGroup \
@@ -1096,31 +1096,33 @@ az webapp config set --name $appName --resource-group $resourceGroup \
     --always-on [true|false] \
     --http20-enabled \
     --auto-heal-enabled [true|false] \
-    --remote-debugging-enabled [true|false] \ # turn itself off after 48 hours
+    --remote-debugging-enabled [true|false] \ # automatically turned off after 48 hours, in case forgotten enabled
     --number-of-workers
 
 az webapp config appsettings set --name $appName --resource-group $resourceGroup /
     --settings \
-        WEBSITES_PORT=8000
-        PRE_BUILD_COMMAND="echo foo, scripts/prebuild.sh" \
-        POST_BUILD_COMMAND="echo foo, scripts/postbuild.sh" \
+        WEBSITES_PORT=8000 \
+        PRE_BUILD_COMMAND="echo foo && scripts/prebuild.sh" \
+        POST_BUILD_COMMAND="echo foo && scripts/postbuild.sh" \
         PROJECT="<project-name>/<project-name>.csproj" \ # Deploy multi-project solutions
-        ASPNETCORE_ENVIRONMENT="Development"
+        ASPNETCORE_ENVIRONMENT="Development" \
         # Custom environment variables
         DB_HOST="myownserver.mysql.database.azure.com"
-        # Verify at: https://<app-name>.scm.azurewebsites.net/Env
 ```
+**📝 NOTE:** Updating or removing application settings will cause an app recycle. [Also, cleaner syntax is possible using `.json`](https://learn.microsoft.com/en-us/cli/azure/webapp/config/appsettings?view=azure-cli-latest#az-webapp-config-appsettings-set:~:text=Resource%20Id%20Arguments-,%2D%2Dsettings,more%20information%20on%20file%20format%20and%20editing%20app%20settings%20in%20bulk.,-%2D%2Dslot%20%2Ds).
 
-### Handler Mappings
+**📝 NOTE:** `https://<app-name>.scm.azurewebsites.net/Env` displays all environment variables configured in your Azure App Service, allowing you to verify that settings like connection strings and app configurations are correctly set and accessible to your application. Configuration settings are **excluded**.
 
-Add custom script processors to handle requests for specific file extensions.
+### [Handler Mappings](https://learn.microsoft.com/en-us/azure/app-service/configure-common?tabs=portal#configure-handler-mappings)
+
+Lets you add custom script processors to handle requests for specific file extensions.
 
 - **Extension**: The file extension you want to handle, such as _\*.php_ or _handler.fcgi_.
 - **Script processor**: The absolute path of the script processor. Requests to files that match the file extension are processed by the script processor. Use the path `D:\home\site\wwwroot` to refer to your app's root directory.
 - **Arguments**: Optional command-line arguments for the script processor.
 
-### Map a URL path to a directory
-
+### [Map a URL path to a directory](https://learn.microsoft.com/en-us/azure/app-service/configure-common?tabs=cli#map-a-url-path-to-a-directory)
+Lets you control which folder serves which URL path - useful for monorepos, static sites, or custom folder structures.
 ```jsonc
 // json.txt
 [
@@ -1131,11 +1133,12 @@ Add custom script processors to handle requests for specific file extensions.
     "virtualPath"':' "/" // any path can be mapped
   }
 ]
-
-// az resource update --set properties.virtualApplications=@json.txt --resource-type Microsoft.Web/sites/config --resource-group $resourceGroup --name $appName
+```
+```bash
+az resource update --resource-group <group-name> --resource-type Microsoft.Web/sites/config --name <app-name>/config/web --set properties.virtualApplications="@json.txt"
 ```
 
-This works for both Windows and Linux apps.
+The feature of mapping a virtual directory to a physical path is available only on Windows apps.
 
 ### [Local Cache](https://learn.microsoft.com/en-us/azure/app-service/overview-local-cache)
 
@@ -1143,21 +1146,23 @@ Not supported for function apps or containerized App Service apps. To enable: `W
 
 ## [Persistence](https://learn.microsoft.com/en-us/azure/app-service/configure-custom-container?tabs=debian&pivots=container-linux#use-persistent-shared-storage)
 
-When persistent storage is _on_ (⏺️ for Linux containers), the `/home` directory allows file persistence and sharing. All writes to `/home` are accessible by all instances, but existing files overwrite /home's contents on start.
+**Persistent storage disabled:** Files written to `/home` are lost on restart or across `instances` (scaled-out app).
 
-`/home/LogFiles` always persists if logging is enabled, regardless of persistent storage status.
+**Persistent storage enabled:** All `/home` writes persist and are shared across all instances, with persistent files overwriting container defaults on startup.
 
-Disable default persistent storage on Linux containers: `az webapp config appsettings set --settings WEBSITES_ENABLE_APP_SERVICE_STORAGE=false ...`
+**Exception:** `/home/LogFiles` always persists when `Application Logging (Filesystem)` option, regardless of the persistent storage setting.
+
+By default, persistent storage is disabled on Linux custom containers. To enable it, set the `WEBSITES_ENABLE_APP_SERVICE_STORAGE=true`.
 
 ### [Mount Azure Storage as a local share in App Service](https://learn.microsoft.com/en-us/azure/app-service/configure-connect-to-azure-storage)
 
-- Supports Azure Files (read/write) and Azure Blobs (read-only for Linux).
+#### Key notes:
+- Supports Azure Files (read/write) and Azure Blobs (read-only for Linux, N/A for Windows).
 - App backups don't include storage mounts.
-- Custom containers offer lower latency for heavy read-only file access compared to built-in Linux images that use Azure Storage.
-- Storage mount changes will restart the app.
-- Deleting Azure Storage requires corresponding mount configuration removal.
-- Storage failover requires app restart or remounting of Azure Storage.
-- Don't use mounts for local databases or apps needing file locks.
+- To avoid latency issues, place the app and the Azure Storage account in the same region.
+- Adding, editing, or deleting a storage mount causes the app to restart.
+- Ensure removal of corresponding storage mount configuration in the app if you delete an Azure Storage account, container, or share.
+- Don't use mounts for local databases (e.g. SQLite) or apps require file locks.
 
 Mount: `az webapp config storage-account add --custom-id <custom-id> --storage-type AzureFiles --share-name <share-name> --account-name <storage-account-name> --access-key "<access-key>" --mount-path <mount-path-directory> ...`  
 Check: `az webapp config storage-account list ...`
