@@ -968,7 +968,7 @@ Horizontal scaling: Adding/removing virtual machines.
 
 Vertical scaling: Scale up/down - when changing app service plan
 
-[**Flapping**](https://learn.microsoft.com/en-us/azure/architecture/best-practices/auto-scaling?WT.mc_id=AZ-MVP-5004334#:~:text=Avoid%20flapping%20where,scale%2Din%20thresholds.): a loop condition where a scale event triggers its opposite in a series of alternating events.
+[**Flapping**](https://learn.microsoft.com/en-us/azure/architecture/best-practices/auto-scaling?WT.mc_id=AZ-MVP-5004334#:~:text=Avoid%20flapping%20where,scale%2Din%20thresholds.): where scale-in and scale-out actions continually go back and forth.
 
 ### Continuous integration/deployment
 
@@ -976,14 +976,14 @@ Built-in CI/CD with Git (Azure DevOps, third-party, local), FTP, and container r
 
 ## [Deployment slots](https://learn.microsoft.com/en-us/azure/app-service/deploy-staging-slots)
 
-All of the slots for a web app share the same deployment plan and virtual machines. They have different host names.
+All of the slots for a web app share the same App Service Plan and can share several configuration. However, [a slot can be considered as a separate VM instance within an app service plan.](https://learn.microsoft.com/en-us/answers/questions/19042/azure-app-service-shared-storage-between-deploymen#:~:text=A%20slot%20can%20be%20considered%20as%20a%20separate%20VM%20instance%20within%20your%20app%20service%20plan.) They have different host names (`my-app-staging.azurewebsites.net` vs `my-app.azurewebsites.net`).
 
 [Best practices](https://learn.microsoft.com/en-us/azure/app-service/deploy-best-practices): Deploy to staging, then swap slots to warm up instances and eliminate downtime.
 
 - **Swapped**: Settings that define the application's _behavior_. Includes connection strings, authentication settings, public certificates, path mappings, CDN, hybrid connections.
 - **Not Swapped**: Settings that define the application's _environment and security_. They are less about the application itself and more about how it interacts with the external world. Examples: Private certificates, managed identities, publishing endpoints, diagnostic logs settings, CORS.
 
-| Settings that are swapped                      | Settings that aren't swapped                            |
+| [Settings that are swappable](https://learn.microsoft.com/en-us/azure/app-service/deploy-staging-slots?utm_source=chatgpt.com&tabs=cli#swap-with-preview-multiple-phase-swap:~:text=When%20you%20swap%20slots%2C%20these%20settings%20are%20swapped)                      | [Settings that are not swappable](https://learn.microsoft.com/en-us/azure/app-service/deploy-staging-slots?utm_source=chatgpt.com&tabs=cli#swap-with-preview-multiple-phase-swap:~:text=When%20you%20swap%20slots%2C%20these%20settings%20aren%27t%20swapped%3A)                            |
 | ---------------------------------------------- | ------------------------------------------------------- |
 | General settings: framework, arch, web sockets | Publishing endpoints                                    |
 | App settings: authentication (can be disabled) | Custom domain names                                     |
@@ -993,25 +993,18 @@ All of the slots for a web app share the same deployment plan and virtual machin
 | WebJobs content                                | IP restrictions                                         |
 | Hybrid connections                             | Always On                                               |
 | Azure Content Delivery Network                 | Diagnostic log settings                                 |
-| Service endpoints                              | Cross-origin resource sharing (CORS)                    |
+| Service endpoints                              | CORS                    |
 | Path mappings                                  | Virtual network integration                             |
 |                                                | Managed identities                                      |
 |                                                | Settings that end with the suffix `\_EXTENSION_VERSION` |
 
-To enable settings swapping, add `WEBSITE_OVERRIDE_PRESERVE_DEFAULT_STICKY_SLOT_SETTINGS` as an app setting in every slot and set it to 0 or false. All settings are either swappable or not. Managed identities are never swapped.
+**📝 NOTE:** `WEBSITE_OVERRIDE_PRESERVE_DEFAULT_STICKY_SLOT_SETTINGS`: Setting this in every slot of the app to “0” or “false” will change behavior of the settings listed above in "not swappable" to "swappable" , with the exceptions below:
+- Managed Identities are never swapped.
+- Those explicitly marked as `Deployment slot` can not be overridden.
 
 **📝 NOTE:** **Hybrid Connections**: Lets your Azure App talk to your local server securely without changing firewall settings.
 
-### [Custom deployment](https://github.com/projectkudu/kudu/wiki/Customizing-deployments)
-
-`.deployment` file:
-
-```txt
-command = deploy.cmd # Run script before deployment
-# project = WebProject/WebProject.csproj
-```
-
-### Route production traffic manually
+### [Route production traffic manually](https://learn.microsoft.com/en-us/azure/app-service/deploy-staging-slots?tabs=portal#route-production-traffic-manually)
 
 `x-ms-routing-name=`: `self` for production slot, `staging` for staging slot.
 
@@ -1023,12 +1016,12 @@ Example: `<a href="<webappname>.azurewebsites.net/?x-ms-routing-name=self">Go ba
 
 App settings are always encrypted when stored (encrypted-at-rest).
 
-App Service passes app settings to the container using the `--env` flag to set the environment variable in the container.
+For Linux apps and custom containers, App Service passes app settings to the container using the `--env` flag to set the environment variable in the container.
 
 App Settings and Connection Strings are set at app startup and **trigger a restart when changed**. They override settings in `Web.config` or `appsettings.json`.
 
-- **Always On**: Keeps app loaded; off by default and app unloads after 20 mins of inactivity. Needed for Application Insights Profiler, continuous WebJobs or WebJobs triggered by a CRON expression.
-- **ARR affinity**: In a multi-instance deployment, ensure that the client is routed to the same instance for the life of the session.
+- **Always On**: Keeps app loaded; off by default. When off, app unloads after 20 mins of inactivity. Needed for Application Insights Profiler, continuous WebJobs or WebJobs triggered by a CRON expression.
+- **ARR affinity (`sticky sessions`)**: In a multi-instance deployment (scaled out to run on multiple VM instances), ensure that the client is routed to the same instance for the life of the session. Disabling ARR affinity often improves performance in stateless apps.
 
 ### App Settings
 
@@ -1037,7 +1030,7 @@ Configuration data is hierarchical (settings can have sub-settings). In Linux, n
 ```cs
 // az webapp config appsettings set --settings MySetting="<value>" MyParentSetting__MySubsetting="<value>" ...
 string mySettingValue = Configuration["MySetting"];
-string myParentSettingValue = Configuration["MyParentSetting/MySubSetting"]; // same as "MyParentSetting:MySubSetting" and "MyParentSetting__MySubSetting"
+string myParentSettingValue = Configuration["MyParentSetting:MySubSetting"]; // same as "MyParentSetting__MySubSetting"
 ```
 
 ```jsonc
@@ -1055,21 +1048,20 @@ string myParentSettingValue = Configuration["MyParentSetting/MySubSetting"]; // 
 
 ### [Source app settings](https://learn.microsoft.com/en-us/azure/app-service/app-service-key-vault-references?tabs=azure-cli#source-app-settings-from-key-vault)
 
-Key vault: Prerequisites: Grant your app access to a key vault to a managed identity
+Key vault: Prerequisites: Grant your app access to a key vault to a managed identity. Instead of storing "my-secret-value", you store `@Microsoft.KeyVault(...)` which tells Azure to fetch the real value from Key Vault at runtime:
 
 - `@Microsoft.KeyVault(SecretUri=https://myvault.vault.azure.net/secrets/mysecret/)`
 - `@Microsoft.KeyVault(VaultName=myvault;SecretName=mysecret)`
 
-App Configuration: `@Microsoft.AppConfiguration(Endpoint=https://myAppConfigStore.azconfig.io; Key=myAppConfigKey; Label=myKeysLabel)`
+[App Configuration](https://learn.microsoft.com/en-us/azure/app-service/app-service-configuration-references#reference-syntax): `@Microsoft.AppConfiguration(Endpoint=https://myAppConfigStore.azconfig.io; Key=myAppConfigKey; Label=myKeysLabel)`
 
-### Connection strings
+### [Connection strings](https://learn.microsoft.com/en-us/azure/app-service/configure-common?tabs=portal#:~:text=At%20runtime%2C%20connection%20strings%20are%20available%20as%20environment%20variables%2C%20prefixed%20with%20the%20following%20connection%20types%3A)
 
-Connection strings are prefixed with connection type. Similar to how they're set in the `Web.config` under `<connectionStrings>`.
+Connection strings are prefixed with connection type at runtime. Similar to how they're set in the `Web.config` under `<connectionStrings>`.
 
 ```cs
 // az webapp config connection-string set --connection-string-type SQLServer --settings MyDb="Server=myserver;Database=mydb;User Id=myuser;Password=mypassword;" ...
 string myConnectionString = Configuration.GetConnectionString("MyDb");
-string myConnectionStringVerbose = Configuration.GetConnectionString("SQLCONNSTR_MyDb"); // Same as above
 string myConnectionStringEnv = Environment.GetEnvironmentVariable("SQLCONNSTR_MyDb"); // Same as above
 ```
 
