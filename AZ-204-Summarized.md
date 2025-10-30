@@ -166,6 +166,7 @@ When quota is exceeded, a `403 Forbidden` status is returned.
 
 Azure APIM has built-in support for HTTP response caching using the resource URL as the key. You can modify the key using request headers with the vary-by properties.
 
+[In a common example in official doc, policies implemented as below:](https://learn.microsoft.com/en-us/azure/api-management/api-management-howto-cache)
 - Get from cache (`cache-lookup`): inbound
 - Store to cache (`cache-store`): outbound
 - Others are mixed
@@ -1187,7 +1188,8 @@ Check: `az webapp config storage-account list ...`
 1. (optinal) Use managed identity for ACR:
    - Assign managed identity to the web app
    - Assign `AcrPull` role: `az role assignment create --assignee $principalId --scope $registry_resource_id --role "AcrPull"`
-   - Set generic config to `{acrUseManagedIdentityCreds:true}` for system identity and `{acrUserManagedIdentityID:id}` for user identity: `az webapp config set --generic-configurations '<json>'`
+   - Set generic config to `{acrUseManagedIdentityCreds:true}` for system identity and `{acrUserManagedIdentityID:id}` for user identity.  
+      `az webapp config set --generic-configurations '{"acrUserManagedIdentityID": "<client-id>"}'`
 1. (optional) Create deployment slot (staging) (Standard+): `az webapp deployment slot create`
 1. Deploy app (add `--slot staging` to use deployment slot):
    - Git: `az webapp deployment source config --repo-url $gitrepo --branch master --manual-integration`
@@ -1206,7 +1208,7 @@ In JSON format.
 
 `az group deployment export --name $resourceGroup --deployment-name $deployment` - create ARM template for specific deploy
 
-`az deployment group create --resource-group $resourceGroup --template-file $armTemplateJsonFile` - create deployment group from ARM template
+`az deployment group create --resource-group $resourceGroup --template-file $armTemplateJsonFile` - create deployment at resource group
 
 ## Security
 
@@ -1214,15 +1216,13 @@ In JSON format.
 
 Enabling this feature will automatically redirect all requests to HTTPS. You can either restrict access to authenticated users or allow anonymous requests. Built-in token store for managing tokens.
 
-On Windows, middleware shares your app's IIS sandbox, but on Linux or in containers, it runs separately.
+In Windows (non-container), the authentication/authorization module runs as a native IIS module in the same sandbox as your application (shares the same runtime, memory space, and security context). When enabled, every incoming HTTP request passes through it before your application handles it.
 
 #### [Service Identity](https://learn.microsoft.com/en-us/azure/app-service/overview-managed-identity)
 
-Main topic: [Managed Identities](./Managed%20Identities.md)
-
 Each deployment slot / app has it's own managed identity configuration.
 
-##### REST endpoint reference
+#### REST endpoint reference
 
 An app with a managed identity defines two environment variables to make an endpoint available. This endpoint can be used to request tokens for accessing other Azure services
 
@@ -1243,7 +1243,7 @@ GET {IDENTITY_ENDPOINT}?resource=https://vault.azure.net&api-version=2019-08-01&
 X-IDENTITY-HEADER: {IDENTITY_HEADER}
 ```
 
-##### Authentication flows
+#### Authentication flows
 
 OAuth enables apps to access resources via user permissions, bypassing the need for credentials. Azure App Service manages this through its authentication module, which handles sessions and tokens. It can authenticate requests and redirect unauthenticated users (login page or 401). Tokens are stored in a token store when enabled. Note: An Access Rule is required.
 
@@ -2326,6 +2326,79 @@ Console.WriteLine($"Last modified time in UTC: {properties.Value.LastModified}")
 
 var metadata = new Dictionary<string, string>() { { "docType", "textDocuments" }, { "category", "guidance" } };
 var containerInfo = await container.SetMetadataAsync(metadata); // ETag, LastModified
+```
+
+### [Manage blob properties and metadata with .NET](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blob-properties-metadata)
+
+```cs
+public BlobServiceClient GetBlobServiceClient(string accountName)
+{
+    BlobServiceClient client = new(
+        new Uri($"https://{accountName}.blob.core.windows.net"),
+        new DefaultAzureCredential());
+
+    return client;
+}
+
+...........
+
+public static async Task SetBlobPropertiesAsync(BlobClient blob)
+{
+    Console.WriteLine("Setting blob properties...");
+
+    try
+    {
+        // Get the existing properties
+        BlobProperties properties = await blob.GetPropertiesAsync();
+
+        BlobHttpHeaders headers = new BlobHttpHeaders
+        {
+            // Set the MIME ContentType every time the properties 
+            // are updated or the field will be cleared
+            ContentType = "text/plain",
+            ContentLanguage = "en-us",
+
+            // Populate remaining headers with 
+            // the pre-existing properties
+            CacheControl = properties.CacheControl,
+            ContentDisposition = properties.ContentDisposition,
+            ContentEncoding = properties.ContentEncoding,
+            ContentHash = properties.ContentHash
+        };
+
+        // Set the blob's properties.
+        await blob.SetHttpHeadersAsync(headers);
+    }
+    catch (RequestFailedException e)
+    {
+        Console.WriteLine($"HTTP error code {e.Status}: {e.ErrorCode}");
+        Console.WriteLine(e.Message);
+        Console.ReadLine();
+    }
+}
+
+...........
+
+private static async Task GetBlobPropertiesAsync(BlobClient blob)
+{
+    try
+    {
+        // Get the blob properties
+        BlobProperties properties = await blob.GetPropertiesAsync();
+
+        // Display some of the blob's property values
+        Console.WriteLine($" ContentLanguage: {properties.ContentLanguage}");
+        Console.WriteLine($" ContentType: {properties.ContentType}");
+        Console.WriteLine($" CreatedOn: {properties.CreatedOn}");
+        Console.WriteLine($" LastModified: {properties.LastModified}");
+    }
+    catch (RequestFailedException e)
+    {
+        Console.WriteLine($"HTTP error code {e.Status}: {e.ErrorCode}");
+        Console.WriteLine(e.Message);
+        Console.ReadLine();
+    }
+}
 ```
 
 ### [Set and retrieve properties and metadata for blob resources by using REST](https://learn.microsoft.com/en-us/rest/api/storageservices/setting-and-retrieving-properties-and-metadata-for-blob-resources)
@@ -4550,7 +4623,7 @@ If you need to archive events beyond the allowed retention period, you can have 
 
 ### [Event Hubs Capture](https://learn.microsoft.com/en-us/azure/event-hubs/event-hubs-capture-overview)
 
-Allows automatic capturing of streaming data into **Azure Blob storage** or **Azure Data Lake Storage**. It can process real-time and batch-based pipelines on the same stream. You can specify the time or size interval for capturing, and it scales automatically with throughput units.
+Built-in feature of Azure Event Hubs that automatically captures the streaming event data and saves it to an  **Azure Blob storage** or **Azure Data Lake Storage**. It can process real-time and batch-based pipelines on the same stream. You can specify the time or size interval for capturing, and it scales automatically with throughput units.
 
 It is a durable buffer for telemetry ingress (similar to a distributed log) with a partitioned consumer model. Captured data is written in Apache Avro format.
 
@@ -5535,6 +5608,7 @@ Sure, here's the table based on the provided information:
 | GET my notes                             | `https://graph.microsoft.com/v1.0/me/onenote/notebooks`                                                                  |
 | Select specific fields                   | `https://graph.microsoft.com/v1.0/groups?$filter=adatumisv_courses/id eq '123'&$select=id,displayName,adatumisv_courses` |
 | Alerts, filter by Category, top 5        | `https://graph.microsoft.com/v1.0/security/alerts?$filter=Category eq 'ransomware'&$top=5`                               |
+| To get only the display name of users with last name 'Bob' | `https://graph.microsoft.com/v1.0/users?$filter=surname eq 'Bob'&$select=displayName`|
 
 #### Using MSAL
 
