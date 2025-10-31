@@ -1302,7 +1302,7 @@ A certificate is accessible to all apps in the same resource group and region co
 
 - **Free Managed Certificate**: Auto renewed every 6 months, no wildcard certificates or private DNS, can't be exported (**cannot be used in other apps**), not supported in ASE.
 - **App Service Certificate**: A private certificate that is managed by Azure. Automated certificate management, renewal and export options.
-- **Using Key Vault**: Store private certificates (same requerenments) in Key Vault. Automatic renewal, except for non-integrated certificates (`az keyvault certificate create ...`, default policy: `az keyvault certificate get-default-policy`)
+- **Using Key Vault**: Store private certificates (same requirements) in Key Vault. Automatic renewal, except for non-integrated certificates (`az keyvault certificate create ...`, default policy: `az keyvault certificate get-default-policy`)
 - **Uploading a Private Certificate**: Requires a password-protected PFX file encrypted with triple DES, with 2048-bit private key and all intermediate/root certificates in the chain.
 - **Uploading a Public Certificate**: For accessing remote resources.
 
@@ -1957,6 +1957,30 @@ Endpoint: `https://<storage-account>.blob.core.windows.net/<container>/<blob>`
 ![Diagram showing the relationship between a storage account, containers, and blobs](https://learn.microsoft.com/en-us/azure/storage/blobs/media/storage-blobs-introduction/blob1.png)
 
 ### [Storage Account](https://learn.microsoft.com/en-us/azure/storage/common/storage-account-overview)
+
+### [Azure Storage Redundancy](https://learn.microsoft.com/en-us/azure/storage/common/storage-redundancy#summary-of-redundancy-options)
+
+| Feature | LRS | ZRS | GRS | RA-GRS | GZRS | RA-GZRS |
+|:---|:---|:---|:---|:---|:---|:---|
+| Replication copies | 3 in primary | 3 across AZs in primary (when region supports AZs) | 3 primary + 3 secondary (replicated) | 3 primary + 3 secondary (replicated) | 3 AZ primary + 3 secondary (replicated) | 3 AZ primary + 3 secondary (replicated) |
+| Availability Zones | No | Yes (when region supports AZs) | No | No | Yes (when region supports AZs) | Yes (when region supports AZs) |
+| Geo-replication | No | No | Yes | Yes | Yes | Yes |
+| Secondary region read access | No | No | No | Yes (read) | No | Yes (read) |
+| Eligible Access Tiers | Hot, Cool, Archive, Premium* | Hot, Cool, Archive, Premium* | Hot, Cool, Archive | Hot, Cool, Archive | Hot, Cool, Archive | Hot, Cool, Archive |
+| Protects against datacenter failure in primary region | No (only local hardware) | Yes (AZ-level) | No (cross-region only) | No (cross-region only) | Yes (AZ-level in primary) | Yes (AZ-level in primary) |
+| Protects against regional disaster | No | No | Yes | Yes | Yes | Yes |
+| Durability (published targets) in 9s | 11 | 12 | 16 | 16 | 16 | 16 |
+| Failover | N/A | N/A | Account-level failover available (service- or customer-initiated; disruptive) | Account-level failover available; secondary is readable (RA) | Account-level failover available | Account-level failover available; secondary readable (RA) |
+
+\* The **Premium** tier refers to Premium Block Blob storage accounts, which only support LRS and ZRS. The **Hot, Cool, and Archive** tiers are available for Standard General-Purpose v2 (GPv2) accounts, which support all listed redundancy options.
+
+- **LRS**: Locally Redundant Storage
+- **ZRS**: Zone-Redundant Storage
+- **GRS**: Geo-Redundant Storage
+- **GZRS**: Geo-Zone-Redundant Storage
+- **RA-GRS**: Read-Access Geo-Redundant Storage
+- **RA-GZRS**: Read-Access Geo-Zone-Redundant Storage
+- **AZ**: Availability Zone
 
 ```sh
 az storage account create
@@ -4949,11 +4973,6 @@ For scripting languages, like `C# Script`, `Python`, you must provide the config
   ]
 }
 ```
-
-### Configuration via CLI
-
-Setting properties: `az resource update --resource-type Microsoft.Web/sites -g $resourceGroup -n <FUNCTION_APP-NAME>/config/web --set properties.XXX`, where `XXX` is the name of the property.
-
 - `functionAppScaleLimit`: 0 or null for unrestricted, or a valid value between 1 and the app maximum (200 for Consumption, 100 for premium).
 
 ### [local.settings.json](https://learn.microsoft.com/en-us/azure/azure-functions/functions-develop-local) (code and test locally)
