@@ -2089,11 +2089,14 @@ az storage blob set-tier
     [--type {block, page}] # append is considered always "hot"
 ```
 
-- Hot: Frequently accessed or modified data. ⚡💲
-- Not-hot: Infrequently accessed or modified data (ex: short-term data backup and disaster recovery). Penalty for early removal of data. 🏷️
-- Archive: Only for individual blob blocks. 🐌. _Offline_ (requires rehydration to be accessed, at least an hour). To access data, either [copy](https://learn.microsoft.com/en-us/azure/storage/blobs/archive-rehydrate-overview#copy-an-archived-blob-to-an-online-tier) or [change](https://learn.microsoft.com/en-us/azure/storage/blobs/archive-rehydrate-overview#change-a-blobs-access-tier-to-an-online-tier) data to online tier. Rehydration copy to a different account is supported if the other account is within the same region. Destination cannot be at archive tier. ❌: \*ZRS redundancy.
-- Non-archive: _Online_ (can be accessed at any time). ❌: append blobs. ⚡
+- **Hot**: Frequently accessed or modified data. ⚡💲
+- **Cool**: Infrequently accessed or modified data (ex: short-term data backup and disaster recovery). Penalty for early removal of data. 🏷️
+- **Cold**: _Online_ (can be accessed at any time).
+- **Archive**: Only for individual blob blocks. 🐌. _Offline_ (requires rehydration to be accessed, at least an hour). To access data, either [copy](https://learn.microsoft.com/en-us/azure/storage/blobs/archive-rehydrate-overview#copy-an-archived-blob-to-an-online-tier) or [change](https://learn.microsoft.com/en-us/azure/storage/blobs/archive-rehydrate-overview#change-a-blobs-access-tier-to-an-online-tier) data to online tier. Rehydration copy to a different account is supported if the other account is within the same region. Destination cannot be at archive tier. ❌: \*ZRS redundancy.
 
+NOTE: `Append` and `Page Blobs` don't have the "Set Blob Tier" operation available at all - neither at creation nor after. They simply inherit and remain in whatever tier your storage account is configured for.
+
+NOTE: In the sequence Hot->Cool->Cold, has lower storage costs and higher access costs.  
 Min retention period (in days): 30 (Cool), 90 (Cold), Archive (180). To avoid penalty, choose a tier with less than required days.
 
 Changing a blob's tier leaves its last modified time untouched. If a lifecycle policy is active, using **Set Blob Tier** to rehydrate may cause the blob to return to the archive tier if the last modified time exceeds the policy's threshold.
@@ -2235,7 +2238,7 @@ Request Headers:
 x-ms-version: 2015-02-21
 x-ms-lease-action: acquire
 x-ms-lease-duration: -1 # In seconds. -1 is infinite
-x-ms-proposed-lease-id: 1f812371-a41d-49e6-b123-f4b542e851c5
+x-ms-proposed-lease-id: 1f812371-a41d-49e6-b123-f4b542e851c5  # optional, all others required.
 x-ms-date: <date>
 ...
 
@@ -2252,7 +2255,7 @@ x-ms-lease-id:[lease_id]
 Data in Azure Storage is encrypted and decrypted transparently using 256-bit AES encryption (similar to BitLocker). Enforced for all tiers. Object metadata is also encrypted.
 
 - **Microsoft Keys**: 🙂 All operations handled by Azure, supporting all services. Keys are stored by Microsoft, who also handles rotation and access.
-- **Customer-Managed Keys**: Handled by Azure but you have more control. Supports some services, stored in Azure Key Vault. You handle key rotation and both you and Microsoft can access.
+- **Customer-Managed Keys**: Handled by Azure but you have more control. Supports some services, stored in Azure Key Vault. You handle key rotation and both you and Microsoft can access.  
   ![Diagram showing how customer-managed keys work in Azure Storage ](https://learn.microsoft.com/en-us/azure/storage/common/media/customer-managed-keys-overview/encryption-customer-managed-keys-diagram.png)
 - **Customer-Provided Keys**: Even more control, mainly for Blob storage. Can be stored in Azure or elsewhere, and you're responsible for key rotation. Only you can access.
 
@@ -2260,8 +2263,8 @@ Data in Azure Storage is encrypted and decrypted transparently using 256-bit AES
 
 ```sh
 az storage account <create/update>
-    [--encryption-key-source {Microsoft.Keyvault, Microsoft.Storage}]
-    [--encryption-services {blob, file, queue, table}] # queue / table with customer-managed keys = 💲
+    [--encryption-key-source {Microsoft.Keyvault, Microsoft.Storage}]   #  determines who manages the encryption keys
+    [--encryption-services {blob, file, queue, table}] # specifies which storage services to encrypt, queue / table with customer-managed keys costs extra 💲
     [--encryption-key-type-for-queue {Account, Service}]
     [--encryption-key-type-for-table {Account, Service}]
     # When using Microsoft.Keyvault:
@@ -2293,7 +2296,7 @@ az storage <type> <operation>
     # EncryptionScope property for BlobOptions in C#
 ```
 
-Encryption makes Access tier 🧊.
+When a blob is encrypted using an encryption scope, you CANNOT move that blob to the Archive tier.  
 
 Using disabled encryption scope will result in `403 Forbidden`.
 
