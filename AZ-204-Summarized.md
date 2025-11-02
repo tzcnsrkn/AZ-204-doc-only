@@ -3707,7 +3707,7 @@ OFFSET 10 LIMIT 20
 - Column names **require** specifiers, e.g. `c.name`, **not** `name`.
 - `FROM` clause is just an alias (no need to specify container name).
 - You can only join within a single container. You can't join data across different containers.
-- Aggregation functions are not supported.
+- [Aggregation functions are supported](https://learn.microsoft.com/en-us/azure/cosmos-db/nosql/query/#:~:text=VectorDistance-,Aggregate%20functions,-REFERENCE).
 
 Queries that have an `ORDER BY` clause with two or more properties require a [composite index](https://learn.microsoft.com/en-us/azure/cosmos-db/index-policy):
 
@@ -3764,8 +3764,17 @@ SELECT VALUE COUNT(1) FROM models
 - `Direct` mode for ⚡
 - Leverage `PartitionKey` for efficient point reads and writes
 - Retry logic for handling transient errors
-- Read 🏋🏿: `Stream API` and `FeedIterator`
 - Write 🏋🏿: Enable bulk support, set `EnableContentResponseOnWrite` to false, exclude unused paths from indexing and keep the size of your documents minimal
+
+#### FeedIterator vs Stream API
+
+| Feature | FeedIterator<T> (Convenient) | Stream API (Heavy Lifting) |
+|---------|------------------------------|----------------------------|
+| **Return Type** | FeedResponse<MyItem> (C# objects) | ResponseMessage (containing a Stream) |
+| **Ease of Use** | High | Low |
+| **Performance** | Good | Best (avoids deserialization overhead) |
+| **Memory Usage** | Higher (objects are created in memory) | Lowest (you can process as a stream) |
+| **Typical Use Case** | Most standard applications, web APIs, business logic. | High-throughput data pipelines, API gateways, microservices that forward data, performance-critical hot paths. |
 
 ## [Global Distribution](https://docs.microsoft.com/en-us/azure/cosmos-db/distribute-data-globally)
 
@@ -4198,6 +4207,8 @@ A _partner_ is a kind of publisher that sends events to Azure Event Grid for cus
 - **Event subscriptions** - The endpoint or mechanism to route events, sometimes to multiple handlers. Subscriptions filter incoming events by type or subject pattern and can be set with an expiration for temporary needs (_no need of cleanup_).
 - **Event handlers** - Receives and processes events. Handlers can be Azure services or custom webhooks. Event Grid ensures event delivery based on handler type.
 
+NOTE: [Clarification on Topic types](https://poe.com/s/ewlzN3KxYCf5PDUpUg7q)
+
 ## Schemas
 
 The header values for CloudEvents and Event Grid schemas are identical except for the `content-type`. In CloudEvents, it's `"content-type":"application/cloudevents+json; charset=utf-8"`, while in Event Grid, it's `"content-type":"application/json; charset=utf-8"`.
@@ -4221,12 +4232,6 @@ type EventSchema = {
   eventTime: string;
   // Unique identifier for the event. Not really matters in general.
   id: string;
-  // Event data specific to the resource provider.
-  data?: {
-    // Optional object unique to each publisher. Also defined as "payload of a notification".
-    // For a BlobCreated event, the data field contains e.g. the blob's url, contentType, and contentLength
-    // Place your properties specific to the resource provider here.
-  };
   // The schema version of the data object. The publisher defines the schema version.
   // If not included, it is stamped with an empty value.
   dataVersion?: string;
@@ -4234,6 +4239,12 @@ type EventSchema = {
   // If not included, Event Grid will stamp onto the event.
   // If included, must match the metadataVersion exactly (currently, only 1)
   metadataVersion?: string;
+  // Event data specific to the resource provider.
+  data?: {
+    // Optional object unique to each publisher. Also defined as "payload of a notification".
+    // For a BlobCreated event, the data field contains e.g. the blob's url, contentType, and contentLength
+    // Place your properties specific to the resource provider here.
+  };
 };
 ```
 
@@ -4318,10 +4329,10 @@ Event subscriptions support custom headers for delivered events. _Up to 10 heade
 
 Event Grid handles errors during event delivery by deciding based on the error type whether to retry, dead-letter (only if enabled), or drop the event. Timeout is 30 sec, then event is rescheduled for retry (exponentially). Retries may be skipped or delayed (up to several hours) for consistently unhealthy endpoints (**delayed delivery**). If the endpoint responds within 3 minutes, Event Grid tries to remove the event from the retry queue. Because of this, duplicates may occur.
 
-| Endpoint Type   | Success               | Error Codes with no retries (immediate dead-lettering)                                        |
-| --------------- | --------------------- | --------------------------------------------------------------------------------------------- |
-| Azure Resources | 200 OK                | 400 Bad Request, 413 Request Entity Too Large, 403 Forbidden                                  |
-| Webhook         | Successful processing | 400 Bad Request, 413 Request Entity Too Large, 403 Forbidden, 404 Not Found, 401 Unauthorized |
+| Endpoint Type | ✅ Success (Stop Sending) | ❌ Permanent Failure (Don't Retry, Dead-Letter) | 🔄 Temporary Failure (Retry) |
+|---------------|---------------------------|------------------------------------------------|------------------------------|
+| **Azure Resources** (e.g., Functions, Logic Apps) | `200 ... 204` | `400 Bad Request` - The event is malformed.<br>`413 Payload Too Large` - The event is too big.<br>`403 Forbidden` - Authentication failed permanently. | Any other code (e.g., `5xx` errors, `408 Timeout`) |
+| **Webhooks** (Any public HTTP endpoint) | `200 ... 204` | `400 Bad Request`<br>`413 Payload Too Large`<br>`403 Forbidden`<br>`401 Unauthorized` - Credentials are missing/wrong.<br>`404 Not Found` - The webhook URL doesn't exist. | Any other code (e.g., `5xx` errors, `408 Timeout`) |
 
 #### Retry policy
 
@@ -4350,7 +4361,7 @@ az eventgrid event-subscription create \
   --source-resource-id $topicid \
   --name <event_subscription_name> \
   --endpoint <endpoint_URL> \
-  # To turn off dead-lettering, rerun this command, but don't provide a value for deadletter-endpoint
+  # To turn off dead-lettering: --deadletter-endpoint ""
   --deadletter-endpoint $storageid/blobServices/default/containers/$containername
 ```
 
@@ -6553,7 +6564,7 @@ Up to 80 GB only.
   - **Peek lock**: _At-Least-Once_ approach. Messages are locked for processing, and the application must explicitly complete the processing to mark the message as consumed. If the application fails, the message can be abandoned or automatically unlocked after a timeout (1min default).
 - **Topics:** Publishers send messages to a topic (1:n), and each message is distributed to all subscriptions registered with the topic.
 - **Subscriptions:** Subscribers receive message copies from the topic, based on filter rules set on their subscriptions. Subscriptions act like virtual queues and can apply filters to receive specific messages. Any consumers of the subscription automatically benefit from the filter.
-- **Rules and actions**: You can configure subscriptions to process messages with specific characteristics differently. This is done using **filter actions**. When a subscription is created, you can define a filter expression that operates on message properties - system (ex. `"Label"`) or custom (ex: `"StoreName"`). This expression allows you to copy only the desired subset of messages to the subscription queue. If no SQL filter expression is provided, the filter action applies to all messages in that subscription.
+- **Rules and actions** (**_does not exist for Queues_**): You can configure subscriptions to process messages with specific characteristics differently. This is done using **filter actions**. When a subscription is created, you can define a filter expression that operates on message properties - system (ex. `"Label"`) or custom (ex: `"StoreName"`). This expression allows you to copy only the desired subset of messages to the subscription queue. If no SQL filter expression is provided, the filter action applies to all messages in that subscription.
 
 ## Tiers
 
@@ -6637,7 +6648,7 @@ Routing is managed internally, but applications can also use user properties for
 
 - **Setting TTL**: Message-level TTL **cannot be higher than topic's (queue) TTL**. If not set, queue's TTL is used.
 - **Message Lock**: When a message is locked, its expiration is halted. Expiration resumes if the lock expires or the message is abandoned.
-- **Dead-Letter Queue**: Expired messages can be moved to a dead-letter queue for further inspection.
+- **Dead-Letter Queue**: Expired messages can be moved to a dead-letter queue for further inspection only if _EnableDeadLetteringOnMessageExpiration_ set to _true_.
 
 ## [Scheduled messages](https://learn.microsoft.com/en-us/azure/service-bus-messaging/message-sequencing#scheduled-messages)
 
