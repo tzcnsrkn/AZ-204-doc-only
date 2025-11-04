@@ -2659,9 +2659,9 @@ azcopy sync \
 Destination needs `Microsoft.Storage/storageAccounts/blobServices/containers/blobs/add/action` permission when adding new lob to the destination.  
 If copying existing blob, source needs `Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read` permission.
 
-You can also use [AZ CLI](https://learn.microsoft.com/en-us/cli/azure/storage/blob/copy?view=azure-cli-latest), [Powershell](https://learn.microsoft.com/en-us/powershell/module/az.storage/start-azstorageblobcopy?view=azps-10.2.0&viewFallbackFrom=azps-4.6.0), or [SDK](https://learn.microsoft.com/en-us/dotnet/api/microsoft.azure.storage.blob.cloudblockblob.startcopyasync?view=azure-dotnet).
+You can also use [AZ CLI](https://learn.microsoft.com/en-us/cli/azure/storage/blob/copy?view=azure-cli-latest), [Powershell](https://learn.microsoft.com/en-us/powershell/module/az.storage/start-azstorageblobcopy?view=azps-10.2.0&viewFallbackFrom=azps-4.6.0), or [SDK](https://learn.microsoft.com/en-us/azure/storage/blobs/storage-blob-copy-async-dotnet).
 
-When copying, for destination you need SAS or OAuth authentication (Azure Files only supports SAS).
+When copying, for destination you need SAS or OAuth authentication.
 
 ## [Network Access Rules](https://learn.microsoft.com/en-us/azure/storage/common/storage-network-security?tabs=azure-portal)
 
@@ -4398,16 +4398,16 @@ Subscriptions roles don't grant access for actions such as creating topics.
 
 To subscribe to event handlers (except WebHooks), you need **Microsoft.EventGrid/EventSubscriptions/Write** permission to the corresponding resource (for system topics and custom topics).
 
-| Topic Type | Permission to write a new event subscription at scope | Description                                                                                                                           |
-| ---------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| System     | Resource publishing the event                         | `/subscriptions/{subscription-id}/resourceGroups/{resource-group-name}/providers/{resource-provider}/{resource-type}/{resource-name}` |
-| Custom     | Event grid topic                                      | `/subscriptions/{subscription-id}/resourceGroups/{resource-group-name}/providers/Microsoft.EventGrid/topics/{topic-name}`             |
+| Topic Type | Description of Event Source | Required Permission Scope (Resource ID) |
+|------------|----------------------------|------------------------------------------|
+| System | The resource that is publishing the event (e.g., a Storage Account). | `/subscriptions/{subscription-id}/resourceGroups/{resource-group-name}/providers/{resource-provider}/{resource-type}/{resource-name}` |
+| Custom | An Event Grid Topic that you created yourself. | `/subscriptions/{subscription-id}/resourceGroups/{resource-group-name}/providers/Microsoft.EventGrid/topics/{topic-name}` |
 
 ## [Webhooks](https://learn.microsoft.com/en-us/azure/event-grid/webhook-event-delivery)
 
 When a new event is ready, Event Grid service POSTs an HTTP request to the configured endpoint with the event in the request body.
 
-Validation is automatically handled for:
+Validation (_handshake_) is automatically handled for:
 
 - Azure Logic Apps with Event Grid Connector
 - Azure Automation via webhook
@@ -4415,12 +4415,25 @@ Validation is automatically handled for:
 
 ### Endpoint validation with Event Grid events
 
-When using an endpoint like an HTTP-triggered Azure function with Event Grid, you'll need to validate the subscription through handshake:
+When using an endpoint like an `HTTP-triggered Azure function with Event Grid`, you have two choices for the manual handshake - depending on what your endpoint can do.
 
-1. Webhook endpoint must return an HTTP 200 status code.
-1. One of the following properties must be available in the response
-   - `validationCode` to complete **Synchronous handshake**
-   - `validationUrl` to transition to manual validation mode (**Asynchronous handshake**). Event subscription status changes to `AwaitingManualAction`. You must perform a GET request to this URL within 5 minutes, otherwise, status will change to `Failed`, and you must restart the process.
+#### 1. Synchronous Handshake (The Quick Reply)
+
+**How it works:** Event Grid's validation request will contain a special code called `validationCode`.
+
+**Your endpoint's job:** Your code must find this `validationCode` in the request and immediately send it back in the response body.
+
+**Analogy:** Event Grid calls you and asks, "What's the secret word?" You immediately reply with the secret word. The subscription is approved instantly.
+
+#### 2. Asynchronous Handshake (The Delayed Reply)
+
+**How it works:** Event Grid's validation request will contain a special URL called `validationUrl`.
+
+**Your endpoint's job:** Your code simply needs to return an HTTP 200 OK response without any special body.
+
+**Your other job:** You (or an automated process) must then make a separate GET request to the `validationUrl` you received. You have 5 minutes to do this.
+
+**Analogy:** Event Grid leaves a note on your door with a link to a website. You just acknowledge you got the note. Then, within 5 minutes, you must visit that website link to confirm. If you don't, the subscription Failed.
 
 **📝 NOTE:** Self-signed certificates are not supported for validation; a signed certificate from a commercial CA is required.
 
@@ -4448,7 +4461,7 @@ When using an endpoint like an HTTP-triggered Azure function with Event Grid, yo
 }
 ```
 
-#### Advanced (Conditional)
+#### Advanced Filtering (Conditional)
 
 ```jsonc
 {
@@ -4553,7 +4566,7 @@ az eventgrid event-subscription create \
 
 ### Publish new events
 
-Create an Event Grid subscription: `Azure portal > Resource groups > PubSubEvents > eventviewer[yourname] web app > + Event Subscription`
+To _Receive_ events: Create an Event Grid subscription: `Azure portal > Resource groups > PubSubEvents > eventviewer[yourname] web app > + Event Subscription`
 
 ```cs
 Uri endpoint = new Uri(topicEndpoint);
