@@ -2709,7 +2709,7 @@ Endpoint: `<registry>.azurecr.io/<repository>/<image-or-artifact>:<tag>`
 
 ## [Working with Azure Container Registry](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-get-started-azure-cli)
 
-```sh
+```bash
 # Login to manage resources
 az login
 
@@ -2907,7 +2907,7 @@ properties:
         volumeMounts:
           - mountPath: /aci/logs/
             name: filesharevolume
-  osType: Linux # or Windows (for single containers)
+  osType: Linux # or Windows (for single containers per single container group)
   restartPolicy: Always
   ipAddress:
     type: Public
@@ -2948,8 +2948,7 @@ To use Azure File Share, you need to:
 
 ## [Azure Container Apps](https://learn.microsoft.com/en-us/azure/container-apps/)
 
-Fully managed (no need to manage other Azure infrastructure) environment. Common use cases:
-
+Common use cases:
 - Deploying API endpoints
 - Hosting background processing applications
 - Handling event-driven processing
@@ -3005,7 +3004,7 @@ az containerapp create \
  #  HTTP Scaling Rule
  --scale-rule-name http-rule-name \
  --scale-rule-type http \
- --scale-rule-http-concurrency 100
+ --scale-rule-http-concurrency 100  # Number of concurrent HTTP requests a single replica can handle before Azure Container Apps scales out
 
  # TCP Scaling Rule
  --scale-rule-name tcp-rule-name \
@@ -3014,6 +3013,7 @@ az containerapp create \
 
  # Custom Scaling rule
  ## Note we use --secrets to define the connection string and reuse it by secret name in --scale-rule-auth
+ ## Example: Scale out when queue has >10 messages, scale in when empty.
   --secrets "connection-string-secret=<SERVICE_BUS_CONNECTION_STRING>" \
  --scale-rule-auth "connection=connection-string-secret"
  --scale-rule-name servicebus-rule-name \
@@ -3080,7 +3080,7 @@ az extension add --name containerapp --upgrade
 # Login to Azure
 az login
 
-# Register providers for Azure App Services (for hosting APIs) and Azure Operational Insights (for telemetry)
+# For once per the az subscription only: Register providers for Azure App Services (for hosting APIs) and Azure Operational Insights (for telemetry)
 az provider register --namespace Microsoft.App
 az provider register --namespace Microsoft.OperationalInsights
 
